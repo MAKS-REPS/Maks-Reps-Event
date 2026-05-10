@@ -22,6 +22,147 @@ def get_level_info(pts):
     next_lvl = min([l for l in LEVEL_DATA.keys() if l > lvl] or [50])
     return lvl, next_lvl, LEVEL_DATA.get(next_lvl, pts)
 
+# --- SYSTEM BLACKJACKA ---
+def draw_card():
+    ranks = ['2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K', 'A']
+    suits = ['♠', '♥', '♦', '♣']
+    rank = random.choice(ranks)
+    suit = random.choice(suits)
+    value = 11 if rank == 'A' else (10 if rank in ['J', 'Q', 'K'] else int(rank))
+    return f"{rank}{suit}", value
+
+def calc_score(hand):
+    score = sum(card[1] for card in hand)
+    aces = sum(1 for card in hand if 'A' in card[0])
+    while score > 21 and aces > 0:
+        score -= 10
+        aces -= 1
+    return score
+
+class BlackjackView(ui.View):
+    def __init__(self, bot, user, bet, p_hand, d_hand):
+        super().__init__(timeout=60)
+        self.bot = bot
+        self.user = user
+        self.bet = bet
+        self.p_hand = p_hand
+        self.d_hand = d_hand
+        self.game_over = False
+
+    async def interaction_check(self, interaction: discord.Interaction) -> bool:
+        if interaction.user.id != self.user.id:
+            await interaction.response.send_message("To nie twoja gra!", ephemeral=True)
+            return False
+        return True
+
+    async def update_board(self, interaction: discord.Interaction):
+        p_score = calc_score(self.p_hand)
+        d_score = calc_score(self.d_hand)
+        
+        p_cards_str = " ".join([f"[{c[0]}]" for c in self.p_hand])
+        
+        if not self.game_over:
+            d_cards_str = f"[{self.d_hand[0][0]}] [??]"
+            color = KOLOR_BIALY
+            title = "Blackjack | Twoja tura"
+            desc = f"**Stawka:** {self.bet} pkt\n\n**Krupier:** {d_cards_str}\n**Twoje karty:** {p_cards_str} = {p_score}\n\nDobierz karte lub zostaw.\nCel: Miej wiecej niz krupier, ale nie przekrocz 21"
+        else:
+            d_cards_str = " ".join([f"[{c[0]}]" for c in self.d_hand])
+            d_data = self.bot.get_user(self.user.id)
+            
+            # Logika wygranej
+            if p_score > 21:
+                title, color, wynik = "Blackjack | Przegrana", 0xff0000, f"-{self.bet} pkt"
+            elif d_score > 21 or p_score > d_score:
+                title, color, wynik = "Blackjack | Wygrana!", 0x00ff00, f"+{self.bet} pkt"
+                d_data["points"] += (self.bet * 2) # Zwraca stawkę i dodaje wygraną
+            elif p_score == d_score:
+                title, color, wynik = "Blackjack | Remis", 0xffff00, "0 pkt (zwrot)"
+                d_data["points"] += self.bet # Zwraca stawkę
+            else:
+                title, color, wynik = "Blackjack | Przegrana", 0xff0000, f"-{self.bet} pkt"
+                
+            self.bot.save_data()
+            desc = f"**Twoje karty:** {p_cards_str} = {p_score}\n**Krupier:** {d_cards_str} = {d_score}\n\n**Stawka:** {self.bet} pkt\n**Wynik:** {wynik}"
+            
+            for child in self.children:
+                child.disabled = True
+
+        embed = discord.Embed(title=title, description=desc, color=color)
+        embed.set_footer(text=f"Użyj /hazard aby zagrać ponownie | {datetime.now().strftime('%H:%M')}")
+        
+        if interaction.response.is_done():
+            await interaction.edit_original_response(embed=embed, view=self)
+        else:
+            await interaction.response.edit_message(embed=embed, view=self)
+
+    @ui.button(label="Dobierz", style=discord.ButtonStyle.primary)
+    async def hit(self, interaction: discord.Interaction, button: ui.Button):
+        self.p_hand.append(draw_card())
+        if calc_score(self.p_hand) >= 21:
+            self.game_over = True
+        await self.update_board(interaction)
+
+    @ui.button(label="Stoj", style=discord.ButtonStyle.secondary)
+    async def stand(self, interaction: discord.Interaction, button: ui.Button):
+        self.game_over = True
+        while calc_score(self.d_hand) < 17:
+            self.d_hand.append(draw_card())
+        await self.update_board(interaction)
+
+# --- MENU KASYNA ---
+class CasinoMenu(ui.View):
+    def __init__(self, bot, user, bet):
+        super().__init__(timeout=60)
+        self.bot = bot
+        self.user = user
+        self.bet = bet
+
+    async def interaction_check(self, interaction: discord.Interaction) -> bool:
+        if interaction.user.id != self.user.id:
+            await interaction.response.send_message("To nie twój panel kasyna!", ephemeral=True)
+            return False
+        return True
+
+    @ui.button(label="Blackjack", style=discord.ButtonStyle.primary)
+    async def btn_bj(self, interaction: discord.Interaction, button: ui.Button):
+        d = self.bot.get_user(self.user.id)
+        d["points"] -= self.bet # Pobieramy stawkę
+        self.bot.save_data()
+        
+        p_hand = [draw_card(), draw_card()]
+        d_hand = [draw_card(), draw_card()]
+        
+        view = BlackjackView(self.bot, self.user, self.bet, p_hand, d_hand)
+        if calc_score(p_hand) == 21:
+            view.game_over = True # Blackjack z rozdania!
+        
+        await view.update_board(interaction)
+
+    @ui.button(label="Ruletka", style=discord.ButtonStyle.danger)
+    async def btn_roulette(self, interaction: discord.Interaction, button: ui.Button):
+        d = self.bot.get_user(self.user.id)
+        d["points"] -= self.bet # Pobieramy stawkę
+        self.bot.save_data()
+        
+        await interaction.response.edit_message(content="🎰 **Losowanie...**", embed=None, view=None)
+        await asyncio.sleep(1.5)
+        
+        if random.random() > 0.52:
+            wygrana = self.bet * 2
+            d["points"] += wygrana
+            res = f"✨ **WYGRANA!** ✨\nTwój zakład: Ruletka (stawka: {self.bet} pkt)\nWynik: +{self.bet} pkt\nNowy stan: `{d['points']:.1f} pkt`"
+            color = 0x00ff00
+        else:
+            res = f"💀 **PRZEGRANA** 💀\nTwój zakład: Ruletka (stawka: {self.bet} pkt)\nWynik: -{self.bet} pkt\nNowy stan: `{d['points']:.1f} pkt`"
+            color = 0xff0000
+            
+        self.bot.save_data()
+        emb = discord.Embed(title="Ruletka | Wynik", description=res, color=color)
+        emb.set_footer(text=f"Użyj /hazard aby zagrać ponownie | {datetime.now().strftime('%H:%M')}")
+        await interaction.edit_original_response(content=None, embed=emb)
+
+# --- GŁÓWNA KLASA ---
 class Event(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
@@ -36,9 +177,27 @@ class Event(commands.Cog):
         d["msg_count"] += 1
         now = asyncio.get_event_loop().time()
         if now - self.cooldowns.get(uid, 0) > 5:
-            d["points"] += (2 * self.bot.point_multiplier)
+            d["points"] += (2 * getattr(self.bot, 'point_multiplier', 1))
             self.cooldowns[uid] = now
             self.bot.save_data()
+
+    @app_commands.command(name="hazard", description="Wejdź do kasyna i spróbuj podwoić punkty!")
+    async def hazard(self, interaction: discord.Interaction, kwota: int):
+        d = self.bot.get_user(interaction.user.id)
+        if kwota < 10: 
+            return await interaction.response.send_message("❌ Minimalna stawka to 10 pkt!", ephemeral=True)
+        if d["points"] < kwota: 
+            return await interaction.response.send_message(f"❌ Nie masz tylu punktów! Twoje saldo to: {d['points']:.1f} pkt", ephemeral=True)
+        
+        embed = discord.Embed(title="Kasyno MAKS REPS", color=KOLOR_BIALY)
+        embed.description = "Wybierz grę i spróbuj podwoić swoje punkty!"
+        embed.add_field(name="Twoja stawka:", value=f"{kwota} pkt", inline=True)
+        embed.add_field(name="Twoje saldo:", value=f"{d['points']:.1f} pkt", inline=True)
+        embed.add_field(name="Dostępne gry:", value="**1. Blackjack** | Dobieraj karty, nie przekrocz 21.\n**2. Ruletka** | Szybkie losowanie (50/50).\n\n*Wygrane i przegrane są natychmiast rozliczane.*", inline=False)
+        embed.set_footer(text=f"Dziś o {datetime.now().strftime('%H:%M')}")
+        
+        view = CasinoMenu(self.bot, interaction.user, kwota)
+        await interaction.response.send_message(embed=embed, view=view)
 
     @app_commands.command(name="profil", description="Twoje statystyki")
     async def profil(self, interaction: discord.Interaction):
@@ -70,23 +229,6 @@ class Event(commands.Cog):
         d["last_daily"] = str(date.today())
         self.bot.save_data()
         await interaction.response.send_message("🎁 Odebrano **15 pkt** bonusu dziennego!", ephemeral=True)
-
-    @app_commands.command(name="hazard", description="Graj o punkty (48% szans na wygraną)")
-    async def hazard(self, interaction: discord.Interaction, kwota: int):
-        d = self.bot.get_user(interaction.user.id)
-        if kwota < 10: return await interaction.response.send_message("❌ Minimum to 10 pkt!", ephemeral=True)
-        if d["points"] < kwota: return await interaction.response.send_message("❌ Nie masz tyle punktów!", ephemeral=True)
-        
-        await interaction.response.send_message("🎰 Losowanie...")
-        await asyncio.sleep(1.5)
-        if random.random() > 0.52:
-            d["points"] += kwota
-            res = f"✨ **WYGRANA!** ✨\nZyskałeś: `{kwota} pkt` | Nowy stan: `{d['points']:.1f} pkt`"
-        else:
-            d["points"] -= kwota
-            res = f"💀 **PRZEGRANA** 💀\nStraciłeś: `{kwota} pkt` | Nowy stan: `{d['points']:.1f} pkt`"
-        self.bot.save_data()
-        await interaction.edit_original_response(content=res)
 
     @app_commands.command(name="ranking", description="Top 10 użytkowników")
     async def ranking(self, interaction: discord.Interaction):
