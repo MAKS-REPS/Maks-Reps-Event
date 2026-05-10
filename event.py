@@ -7,32 +7,6 @@ import asyncio
 TICKET_CATEGORY_ID = 1486842150661656767
 NAZWA_EVENTU = "Maks Reps Event"
 
-class TicketControl(ui.View):
-    def __init__(self):
-        super().__init__(timeout=None)
-    @ui.button(label="🔒 Zamknij", style=discord.ButtonStyle.danger)
-    async def close(self, interaction, button):
-        await interaction.response.send_message("Usuwanie kanału...")
-        await asyncio.sleep(3)
-        await interaction.channel.delete()
-
-class TaskSelect(ui.Select):
-    def __init__(self):
-        options = [
-            discord.SelectOption(label="Zamówienie paki z linku", emoji="📦"),
-            discord.SelectOption(label="Obserwacja na TikToku", emoji="📱"),
-            discord.SelectOption(label="Zaproszenie 2 osób", emoji="👥"),
-            discord.SelectOption(label="Dodanie haula", emoji="🎥")
-        ]
-        super().__init__(placeholder="Wybierz zadanie...", options=options)
-
-    async def callback(self, interaction):
-        cat = interaction.guild.get_channel(TICKET_CATEGORY_ID)
-        ch = await interaction.guild.create_text_channel(f"ticket-{interaction.user.name}", category=cat)
-        embed = discord.Embed(title="Weryfikacja Zadania", description=f"Użytkownik: {interaction.user.mention}\nZadanie: **{self.values[0]}**", color=0x2ecc71)
-        await ch.send(embed=embed, view=TicketControl())
-        await interaction.response.send_message(f"Otwarto ticket: {ch.mention}", ephemeral=True)
-
 class Event(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
@@ -49,24 +23,56 @@ class Event(commands.Cog):
             self.cooldowns[uid] = now
             self.bot.save_data()
 
-    @app_commands.command(name="level")
-    async def level(self, interaction):
+    @app_commands.command(name="level", description="Pokazuje twój profil")
+    async def level(self, interaction: discord.Interaction):
         d = self.bot.get_user(interaction.user.id)
-        lvl = min(math.floor(d["points"] / 100) + 1, 50)
-        embed = discord.Embed(title=f"Profil {interaction.user.name}", color=0xf1c40f)
-        embed.add_field(name="Level", value=str(lvl))
-        embed.add_field(name="Punkty", value=str(d["points"]))
+        pts = d["points"]
+        lvl = min(math.floor(pts / 100) + 1, 50)
+        progress = int(pts % 100)
+        
+        embed = discord.Embed(title=f"Profil: {interaction.user.display_name}", color=0x2b2d31)
+        embed.set_author(name=NAZWA_EVENTU)
+        embed.add_field(name="✨ Poziom", value=f"**{lvl}**", inline=True)
+        embed.add_field(name="💰 Punkty", value=f"**{pts:.1f}**", inline=True)
+        
+        # Pasek postępu (zdjęcie 3)
+        bar = "🟩" * (progress // 10) + "⬛" * (10 - (progress // 10))
+        embed.add_field(name=f"Postęp do Levelu {lvl+1}", value=f"{bar} **{progress}%**", inline=False)
+        embed.set_thumbnail(url=interaction.user.display_avatar.url)
         await interaction.response.send_message(embed=embed)
 
-    @app_commands.command(name="zadania")
-    async def zadania(self, interaction):
-        embed = discord.Embed(title="Zadania", description="1. Paka z linku (100 pkt)\n2. TikTok (30 pkt)\n3. Zaproszenia (100 pkt)", color=discord.Color.blue())
+    @app_commands.command(name="ranking", description="Top 10 osób w evencie")
+    async def ranking(self, interaction: discord.Interaction):
+        # Sortowanie (zdjęcie 4)
+        sorted_users = sorted(self.bot.user_data.items(), key=lambda x: x[1]['points'], reverse=True)[:10]
+        
+        embed = discord.Embed(title=f"🏆 Ranking - {NAZWA_EVENTU}", color=discord.Color.gold())
+        description = ""
+        for i, (uid, data) in enumerate(sorted_users, 1):
+            user = self.bot.get_user(int(uid))
+            name = f"<@{uid}>"
+            description += f"**{i}.** {name} — `{data['points']:.1f} pkt` (Lvl {min(math.floor(data['points']/100)+1, 50)})\n"
+        
+        embed.description = description if description else "Brak danych."
         await interaction.response.send_message(embed=embed)
 
-    @app_commands.command(name="odbierz")
-    async def odbierz(self, interaction):
-        view = ui.View(); view.add_item(TaskSelect())
-        await interaction.response.send_message("Wybierz zadanie do zweryfikowania:", view=view, ephemeral=True)
+    @app_commands.command(name="odbierz", description="Odbierz punkty za zadanie")
+    async def odbierz(self, interaction: discord.Interaction):
+        view = ui.View()
+        select = ui.Select(placeholder="Wybierz zadanie do weryfikacji...")
+        select.add_option(label="Zamówienie paki z linku", emoji="📦", value="Paka")
+        select.add_option(label="Obserwacja na TikToku", emoji="📱", value="TikTok")
+        
+        async def callback(inter):
+            cat = inter.guild.get_channel(TICKET_CATEGORY_ID)
+            ch = await inter.guild.create_text_channel(f"ticket-{inter.user.name}", category=cat)
+            embed = discord.Embed(title="Weryfikacja", description=f"Zadanie: **{select.values[0]}**", color=0x2ecc71)
+            await ch.send(content=f"{inter.user.mention} | Administracja", embed=embed)
+            await inter.response.send_message(f"Otwarto ticket: {ch.mention}", ephemeral=True)
+
+        select.callback = callback
+        view.add_item(select)
+        await interaction.response.send_message("Wybierz opcję:", view=view, ephemeral=True)
 
 async def setup(bot):
     await bot.add_cog(Event(bot))
