@@ -5,6 +5,7 @@ import json
 
 TOKEN = os.getenv('DISCORD_TOKEN')
 DATA_FILE = 'data.json'
+ALLOWED_CATEGORY_ID = 1503079432339066963  # ID dozwolonej kategorii
 
 class MaksRepsBot(commands.Bot):
     def __init__(self):
@@ -34,12 +35,30 @@ class MaksRepsBot(commands.Bot):
         return self.user_data[uid]
 
     async def setup_hook(self):
-        # Ładowanie modułów
+        # Globalna blokada kategorii dla komend slash
+        @self.tree.interaction_check
+        async def check_category(interaction: discord.Interaction):
+            # Jeśli kanał nie ma kategorii lub ID się nie zgadza
+            if not interaction.channel.category or interaction.channel.category_id != ALLOWED_CATEGORY_ID:
+                await interaction.response.send_message(
+                    f"❌ Tego bota można używać tylko w kategorii <#{ALLOWED_CATEGORY_ID}>!", 
+                    ephemeral=True
+                )
+                return False
+            return True
+
+        # Ładowanie modułów (kasyno usunięte)
         await self.load_extension('event')
-        await self.load_extension('kasyno')
         await self.load_extension('admin')
+        
         await self.tree.sync()
         print("Maks Reps Event Online!")
+        print(f"Blokada kategorii {ALLOWED_CATEGORY_ID} aktywna.")
 
 bot = MaksRepsBot()
+
+@bot.event
+async def on_ready():
+    print(f"Zalogowano jako {bot.user}")
+
 bot.run(TOKEN)
