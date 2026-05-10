@@ -3,35 +3,69 @@ from discord.ext import commands
 from discord import app_commands, ui
 import random
 
+class KasynoView(ui.View):
+    def __init__(self, bot, user_id):
+        super().__init__(timeout=60)
+        self.bot = bot
+        self.user_id = user_id
+
+    @ui.button(label="🎰 Ruletka", style=discord.ButtonStyle.danger)
+    async def ruletka(self, interaction: discord.Interaction, button: ui.Button):
+        if interaction.user.id != self.user_id: return
+        view = RuletkaGame(self.bot, self.user_id)
+        await interaction.response.edit_message(content="Wybierz kolor w Ruletce (Stawka: 2 pkt):", view=view)
+
+    @ui.button(label="🃏 Blackjack", style=discord.ButtonStyle.primary)
+    async def blackjack(self, interaction: discord.Interaction, button: ui.Button):
+        if interaction.user.id != self.user_id: return
+        # Logika BJ (uproszczona)
+        d = self.bot.get_user(self.user_id)
+        if d["points"] < 2: return await interaction.response.send_message("Brak punktów!", ephemeral=True)
+        
+        res = random.choice(["win", "lose"])
+        if res == "win":
+            d["points"] += 2
+            msg = "🃏 **Blackjack!** Wygrałeś 2 pkt."
+        else:
+            d["points"] -= 2
+            msg = "🃏 **Przegrałeś!** Straciłeś 2 pkt."
+        self.bot.save_data()
+        await interaction.response.edit_message(content=msg, view=None)
+
+class RuletkaGame(ui.View):
+    def __init__(self, bot, user_id):
+        super().__init__()
+        self.bot = bot
+        self.user_id = user_id
+
+    async def play(self, interaction, color_choice):
+        d = self.bot.get_user(self.user_id)
+        if d["points"] < 2: return
+        
+        result = random.choices(["red", "black", "green"], weights=[47, 47, 6])[0]
+        if color_choice == result:
+            prize = 28 if result == "green" else 4
+            d["points"] += prize
+            msg = f"🟢 Wypadło **{result}**! Wygrałeś!"
+        else:
+            d["points"] -= 2
+            msg = f"🔴 Wypadło **{result}**. Przegrałeś."
+        self.bot.save_data()
+        await interaction.response.edit_message(content=msg, view=None)
+
+    @ui.button(label="Czerwone", style=discord.ButtonStyle.danger)
+    async def red(self, interaction, btn): await self.play(interaction, "red")
+    @ui.button(label="Czarne", style=discord.ButtonStyle.secondary)
+    async def black(self, interaction, btn): await self.play(interaction, "black")
+
 class Kasyno(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
-    @app_commands.command(name="kasyno", description="Graj o punkty (stawka 2 pkt)")
-    async def kasyno(self, interaction):
-        d = self.bot.get_user(interaction.user.id)
-        if d["points"] < 2:
-            return await interaction.response.send_message("Brak punktów!", ephemeral=True)
-
-        view = ui.View()
-        btn_bj = ui.Button(label="Blackjack", style=discord.ButtonStyle.primary)
-        btn_rl = ui.Button(label="Ruletka", style=discord.ButtonStyle.danger)
-
-        async def bj_callback(inter):
-            res = random.choice([True, False])
-            u = self.bot.get_user(inter.user.id)
-            if res:
-                u["points"] += 2
-                await inter.response.send_message("Wygrałeś w Blackjacka! +2 pkt")
-            else:
-                u["points"] -= 2
-                await inter.response.send_message("Przegrałeś w Blackjacka! -2 pkt")
-            self.bot.save_data()
-
-        btn_bj.callback = bj_callback
-        view.add_item(btn_bj)
-        view.add_item(btn_rl)
-        await interaction.response.send_message("W co grasz?", view=view, ephemeral=True)
+    @app_commands.command(name="kasyno", description="Wybierz grę w kasynie")
+    async def kasyno(self, interaction: discord.Interaction):
+        embed = discord.Embed(title="Maks Reps Kasyno", description="Wybierz grę, w którą chcesz zagrać za 2 pkt.")
+        await interaction.response.send_message(embed=embed, view=KasynoView(self.bot, interaction.user.id), ephemeral=True)
 
 async def setup(bot):
     await bot.add_cog(Kasyno(bot))
