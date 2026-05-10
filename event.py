@@ -61,7 +61,6 @@ class Event(commands.Cog):
         
         lvl, next_lvl, next_pts = get_level_info(pts)
         
-        # Progres do następnego progu z tabeli
         prev_pts = LEVEL_DATA.get(lvl, 0) if lvl > 1 else 0
         progress_range = next_pts - prev_pts
         current_progress = pts - prev_pts
@@ -82,7 +81,7 @@ class Event(commands.Cog):
         embed.add_field(name="Wiadomości", value=f"{msgs}", inline=False)
         embed.add_field(name=f"Postęp do LVL {next_lvl}", value=f"[{bar}] **{percentage}%**\n{pts:.1f} / {next_pts:.1f} pkt", inline=False)
         
-        embed.set_footer(text=f"{NAZWA_EVENTU} | Dziś o {datetime.now().strftime('%H:%M')}")
+        embed.set_footer(text=f"Maks Reps Event | Dziś o {datetime.now().strftime('%H:%M')}")
         await interaction.response.send_message(embed=embed)
 
     @app_commands.command(name="zadania", description="Lista wszystkich zadań")
@@ -101,7 +100,7 @@ class Event(commands.Cog):
             ("📸 10. Instagram", "JEDNORAZOWE | 30 pkt")
         ]
         for n, v in tasks: embed.add_field(name=n, value=v, inline=False)
-        embed.set_footer(text=f"{NAZWA_EVENTU} | Dziś o {datetime.now().strftime('%H:%M')}")
+        embed.set_footer(text=f"Maks Reps Event | Dziś o {datetime.now().strftime('%H:%M')}")
         await interaction.response.send_message(embed=embed)
 
     @app_commands.command(name="odbierz", description="Zgłoś wykonanie zadania")
@@ -112,7 +111,10 @@ class Event(commands.Cog):
             discord.SelectOption(label="Zaproszenia", value="ZAPROSZENIA", emoji="👥"),
             discord.SelectOption(label="Dodanie haula", value="HAUL", emoji="📹"),
             discord.SelectOption(label="Zgłoszenie błędu", value="BŁĄD", emoji="⚠️"),
-            discord.SelectOption(label="Podesłanie promki", value="PROMKA", emoji="📢")
+            discord.SelectOption(label="Podesłanie promki", value="PROMKA", emoji="📢"),
+            discord.SelectOption(label="Boost serwera", value="BOOST", emoji="🚀"),
+            discord.SelectOption(label="Link dc w bio", value="BIO", emoji="🌐"),
+            discord.SelectOption(label="Obserwacja Sociali", value="SOCIALE", emoji="📱")
         ]
         
         class TicketView(ui.View):
@@ -120,13 +122,27 @@ class Event(commands.Cog):
             async def select_callback(self, inter, select):
                 cat = inter.guild.get_channel(TICKET_CATEGORY_ID)
                 ch = await inter.guild.create_text_channel(f"zgloszenie-{inter.user.name}", category=cat)
+                
+                # Embed wewnątrz ticketa
                 emb = discord.Embed(color=0x3498db, title="🎫 MAKS REPS × TICKET")
                 emb.description = f"Witaj {inter.user.mention}!\n\nWybrałeś kategorię: **{select.values[0]}**.\n\nZaraz ktoś z administracji Ci pomoże."
-                emb.set_footer(text=f"{NAZWA_EVENTU} | Dziś o {datetime.now().strftime('%H:%M')}")
+                emb.set_footer(text=f"Maks Reps Event | Dziś o {datetime.now().strftime('%H:%M')}")
+                
                 await ch.send(f"{inter.user.mention} | @everyone", embed=emb)
                 await inter.response.send_message(f"Otwarto ticket: {ch.mention}", ephemeral=True)
 
         await interaction.response.send_message("Wybierz zadanie z listy poniżej:", view=TicketView(), ephemeral=True)
+
+    @app_commands.command(name="ranking", description="Top 10 graczy eventu")
+    async def ranking(self, interaction: discord.Interaction):
+        sorted_users = sorted(self.bot.user_data.items(), key=lambda x: x[1].get('points', 0), reverse=True)[:10]
+        desc = ""
+        for i, (uid, data) in enumerate(sorted_users, 1):
+            desc += f"**#{i}** <@{uid}> — **{data.get('points', 0):.1f} pkt**\n"
+        
+        embed = discord.Embed(title="Ranking TOP 10 eventu", description=desc if desc else "Brak danych.", color=0x2b2d31)
+        embed.set_footer(text=f"Maks Reps Event | Dziś o {datetime.now().strftime('%H:%M')}")
+        await interaction.response.send_message(embed=embed)
 
 async def setup(bot):
     await bot.add_cog(Event(bot))
