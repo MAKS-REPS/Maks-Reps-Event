@@ -1,26 +1,27 @@
 import discord
 from discord.ext import commands
 from discord import app_commands
+import asyncio
 
 class Admin(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
-    @app_commands.command(name="admin_daj_punkty")
+    @app_commands.command(name="happyhour", description="Uruchom mnożnik punktów na określony czas")
     @app_commands.checks.has_permissions(administrator=True)
-    async def add(self, interaction, member: discord.Member, ilosc: float):
-        d = self.bot.get_user(member.id)
-        d["points"] += ilosc
-        self.bot.save_data()
-        await interaction.response.send_message(f"✅ Dodano **{ilosc} pkt** dla {member.mention}")
-
-    @app_commands.command(name="admin_usun_punkty")
-    @app_commands.checks.has_permissions(administrator=True)
-    async def remove(self, interaction, member: discord.Member, ilosc: float):
-        d = self.bot.get_user(member.id)
-        d["points"] -= ilosc
-        self.bot.save_data()
-        await interaction.response.send_message(f"❌ Odjęto **{ilosc} pkt** od {member.mention}")
+    async def happyhour(self, interaction: discord.Interaction, mnoznik: int, minuty: int):
+        self.bot.point_multiplier = mnoznik
+        
+        emb = discord.Embed(
+            title="⚡ HAPPY HOUR!",
+            description=f"Przez najbliższe **{minuty} minut** zdobywacie **x{mnoznik}** punktów za pisanie!",
+            color=0xffffff
+        )
+        await interaction.response.send_message(embed=emb)
+        
+        await asyncio.sleep(minuty * 60)
+        self.bot.point_multiplier = 1
+        await interaction.channel.send("⏳ Happy Hour zakończony. Punkty wróciły do normy.")
 
 async def setup(bot):
     await bot.add_cog(Admin(bot))
