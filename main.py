@@ -3,7 +3,6 @@ from discord.ext import commands
 import os
 import json
 
-# --- KONFIGURACJA ---
 TOKEN = os.getenv('DISCORD_TOKEN')
 DATA_FILE = 'data.json'
 
@@ -19,13 +18,13 @@ class MaksRepsBot(commands.Bot):
     def load_data(self):
         if os.path.exists(DATA_FILE):
             try:
-                with open(DATA_FILE, 'r') as f:
+                with open(DATA_FILE, 'r', encoding='utf-8') as f:
                     return json.load(f)
             except: return {}
         return {}
 
     def save_data(self):
-        with open(DATA_FILE, 'w') as f:
+        with open(DATA_FILE, 'w', encoding='utf-8') as f:
             json.dump(self.user_data, f, indent=4)
 
     def get_user(self, user_id):
@@ -35,17 +34,12 @@ class MaksRepsBot(commands.Bot):
         return self.user_data[uid]
 
     async def setup_hook(self):
-        # Ładowanie pozostałych plików
+        # Ładowanie modułów
         await self.load_extension('event')
         await self.load_extension('kasyno')
         await self.load_extension('admin')
         await self.tree.sync()
-        print("Wszystkie moduły Maks Reps Event zostały załadowane!")
+        print("Maks Reps Event Online!")
 
 bot = MaksRepsBot()
-
-@bot.event
-async def on_ready():
-    print(f'Zalogowano jako {bot.user.name}')
-
 bot.run(TOKEN)
