@@ -4,10 +4,12 @@ from discord import app_commands, ui
 import asyncio
 from datetime import datetime, date
 
+# --- KONFIGURACJA ---
 TICKET_CATEGORY_ID = 1486842150661656767
 ALLOWED_CHANNELS = [1468529379318698117, 1457763945631715456]
 KOLOR_BIALY = 0xffffff
 
+# Progi punktowe dla poziomów
 LEVEL_DATA = {
     3: 275, 5: 500, 6: 750, 7: 1000, 9: 1666, 10: 2000, 
     12: 2600, 14: 3200, 15: 3500, 20: 6000, 50: 37500
@@ -35,6 +37,7 @@ class Event(commands.Cog):
         d = self.bot.get_user(message.author.id)
         d["msg_count"] += 1
         
+        # Cooldown na punkty za pisanie (raz na 5 sekund)
         now = asyncio.get_event_loop().time()
         if now - self.cooldowns.get(uid, 0) > 5:
             d["points"] += (2 * getattr(self.bot, 'point_multiplier', 1))
@@ -51,6 +54,7 @@ class Event(commands.Cog):
         filled = progress // 10
         bar = "⬛" * filled + "⬜" * (10 - filled)
 
+        # Obliczanie pozycji w rankingu
         sorted_users = sorted(self.bot.user_data.items(), key=lambda x: x[1].get('points', 0), reverse=True)
         rank = next((i for i, (uid, _) in enumerate(sorted_users, 1) if uid == str(interaction.user.id)), "N/A")
 
@@ -69,13 +73,15 @@ class Event(commands.Cog):
 
     @app_commands.command(name="ranking", description="Top 10 użytkowników")
     async def ranking(self, interaction: discord.Interaction):
+        # Sortowanie użytkowników po punktach
         sorted_u = sorted(self.bot.user_data.items(), key=lambda x: x[1].get('points', 0), reverse=True)[:10]
         desc = ""
         for i, (uid, data) in enumerate(sorted_u, 1):
             desc += f"**#{i}** <@{uid}> - `{data.get('points', 0):.1f} pkt`\n"
         
         emb = discord.Embed(title="🏆 TOP 10 EVENTU", description=desc or "Brak danych", color=KOLOR_BIALY)
-        await interaction.response.send_message(emb)
+        # POPRAWKA: Przekazujemy embed=emb
+        await interaction.response.send_message(embed=emb)
 
     @app_commands.command(name="daily", description="Odbierz 15 pkt bonusu")
     async def daily(self, interaction: discord.Interaction):
@@ -97,7 +103,7 @@ class Event(commands.Cog):
             "3. **Dodaj swojego haula na kanale**\nWIELORAZOWE | 50 - 200 pkt",
             "4. **Zgłoszenie błędu**\nWIELORAZOWE | 30 - 100 pkt",
             "5. **Podesłanie promki**\nWIELORAZOWE | 30 - 100 pkt",
-            "6. **Zamówienie paki z mojego linku**\nWIELORAZOWE | 500 pkt",
+            "6. **Zamówienie paki z linku**\nWIELORAZOWE | 500 pkt",
             "7. **Boost serwera**\nJEDNORAZOWE | 150 pkt",
             "8. **Dodanie linku do discorda w bio**\nJEDNORAZOWE | 30 pkt",
             "9. **Obserwacja na tiktok**\nJEDNORAZOWE | 30 pkt",
