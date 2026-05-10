@@ -3,9 +3,10 @@ from discord.ext import commands
 import os
 import json
 
-TOKEN = os.getenv('DISCORD_TOKEN')
+# UPEWNIJ SIĘ, ŻE MASZ TOKEN W ŚRODOWISKU LUB WPISZ GO TUTAJ
+TOKEN = os.getenv('DISCORD_TOKEN') 
 DATA_FILE = 'data.json'
-ALLOWED_CATEGORY_ID = 1503079432339066963  # ID dozwolonej kategorii
+ALLOWED_CATEGORY_ID = 1503079432339066963 
 
 class MaksRepsBot(commands.Bot):
     def __init__(self):
@@ -13,6 +14,7 @@ class MaksRepsBot(commands.Bot):
         intents.message_content = True
         intents.members = True
         super().__init__(command_prefix="!", intents=intents)
+        # WCZYTYWANIE PUNKTÓW Z PLIKU
         self.user_data = self.load_data()
         self.event_active = True
 
@@ -20,13 +22,21 @@ class MaksRepsBot(commands.Bot):
         if os.path.exists(DATA_FILE):
             try:
                 with open(DATA_FILE, 'r', encoding='utf-8') as f:
-                    return json.load(f)
-            except: return {}
+                    data = json.load(f)
+                    print("✅ Dane użytkowników zostały pomyślnie wczytane.")
+                    return data
+            except Exception as e:
+                print(f"❌ Błąd wczytywania pliku: {e}")
+                return {}
         return {}
 
     def save_data(self):
-        with open(DATA_FILE, 'w', encoding='utf-8') as f:
-            json.dump(self.user_data, f, indent=4)
+        """Ta funkcja fizycznie zapisuje punkty do pliku data.json"""
+        try:
+            with open(DATA_FILE, 'w', encoding='utf-8') as f:
+                json.dump(self.user_data, f, indent=4)
+        except Exception as e:
+            print(f"❌ BŁĄD ZAPISU DANYCH: {e}")
 
     def get_user(self, user_id):
         uid = str(user_id)
@@ -35,10 +45,9 @@ class MaksRepsBot(commands.Bot):
         return self.user_data[uid]
 
     async def setup_hook(self):
-        # Globalna blokada kategorii dla komend slash
+        # Blokada kategorii
         @self.tree.interaction_check
         async def check_category(interaction: discord.Interaction):
-            # Jeśli kanał nie ma kategorii lub ID się nie zgadza
             if not interaction.channel.category or interaction.channel.category_id != ALLOWED_CATEGORY_ID:
                 await interaction.response.send_message(
                     f"❌ Tego bota można używać tylko w kategorii <#{ALLOWED_CATEGORY_ID}>!", 
@@ -47,18 +56,16 @@ class MaksRepsBot(commands.Bot):
                 return False
             return True
 
-        # Ładowanie modułów (kasyno usunięte)
+        # Ładowanie modułów
         await self.load_extension('event')
         await self.load_extension('admin')
-        
         await self.tree.sync()
-        print("Maks Reps Event Online!")
-        print(f"Blokada kategorii {ALLOWED_CATEGORY_ID} aktywna.")
+        print("🚀 Maks Reps Event Online!")
 
 bot = MaksRepsBot()
 
 @bot.event
 async def on_ready():
-    print(f"Zalogowano jako {bot.user}")
+    print(f"🤖 Zalogowano jako {bot.user}")
 
 bot.run(TOKEN)
