@@ -5,7 +5,7 @@ import json
 import asyncio
 
 # --- KONFIGURACJA ---
-TOKEN = 'TWÓJ_TOKEN_TUTAJ' # Tutaj wklej swój token bota
+TOKEN = os.getenv('DISCORD_TOKEN')
 DATA_FILE = 'data.json'
 
 class MaksRepsBot(commands.Bot):
