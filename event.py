@@ -8,6 +8,8 @@ from datetime import datetime
 # Konfiguracja
 TICKET_CATEGORY_ID = 1486842150661656767
 NAZWA_EVENTU = "Maks Reps Event"
+# Lista ID kanałów, na których można zdobywać punkty
+ALLOWED_CHANNELS = [1468529379318698117, 1457763945631715456]
 
 # Tabela poziomów (Punkty ze zdjęcia podzielone przez 2)
 LEVEL_DATA = {
@@ -20,18 +22,15 @@ LEVEL_DATA = {
 }
 
 def get_level_info(current_points):
-    """Oblicza aktualny poziom i punkty do następnego na podstawie tabeli."""
     sorted_lvls = sorted(LEVEL_DATA.keys())
     current_lvl = 1
     next_lvl = sorted_lvls[0]
-    
     for lvl in sorted_lvls:
         if current_points >= LEVEL_DATA[lvl]:
             current_lvl = lvl
         else:
             next_lvl = lvl
             break
-            
     points_needed = LEVEL_DATA.get(next_lvl, current_points)
     return current_lvl, next_lvl, points_needed
 
@@ -42,7 +41,14 @@ class Event(commands.Cog):
 
     @commands.Cog.listener()
     async def on_message(self, message):
-        if message.author.bot or not getattr(self.bot, 'event_active', True): return
+        # Sprawdzenie: czy to bot, czy event jest aktywny ORAZ czy kanał jest na liście dozwolonych
+        if message.author.bot or not getattr(self.bot, 'event_active', True): 
+            return
+        
+        # AKTUALIZACJA: Punkty naliczane TYLKO na wybranych kanałach
+        if message.channel.id not in ALLOWED_CHANNELS:
+            return
+
         uid = str(message.author.id)
         d = self.bot.get_user(message.author.id)
         d["msg_count"] = d.get("msg_count", 0) + 1
@@ -58,7 +64,6 @@ class Event(commands.Cog):
         d = self.bot.get_user(interaction.user.id)
         pts = d.get("points", 0.0)
         msgs = d.get("msg_count", 0)
-        
         lvl, next_lvl, next_pts = get_level_info(pts)
         
         prev_pts = LEVEL_DATA.get(lvl, 0) if lvl > 1 else 0
@@ -68,7 +73,6 @@ class Event(commands.Cog):
         
         filled = percentage // 10
         bar = "⬜" * filled + "⬛" * (10 - filled)
-
         sorted_ranking = sorted(self.bot.user_data.items(), key=lambda x: x[1].get('points', 0), reverse=True)
         ranking_pos = next((f"#{i}" for i, (uid, _) in enumerate(sorted_ranking, 1) if uid == str(interaction.user.id)), "N/A")
 
@@ -123,7 +127,6 @@ class Event(commands.Cog):
                 cat = inter.guild.get_channel(TICKET_CATEGORY_ID)
                 ch = await inter.guild.create_text_channel(f"zgloszenie-{inter.user.name}", category=cat)
                 
-                # Embed wewnątrz ticketa
                 emb = discord.Embed(color=0x3498db, title="🎫 MAKS REPS × TICKET")
                 emb.description = f"Witaj {inter.user.mention}!\n\nWybrałeś kategorię: **{select.values[0]}**.\n\nZaraz ktoś z administracji Ci pomoże."
                 emb.set_footer(text=f"Maks Reps Event | Dziś o {datetime.now().strftime('%H:%M')}")
