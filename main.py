@@ -15,7 +15,7 @@ class MaksRepsBot(commands.Bot):
         super().__init__(command_prefix="!", intents=intents)
         self.user_data = self.load_data()
         self.event_active = True
-        self.point_multiplier = 1 # Domyślny mnożnik punktów
+        self.point_multiplier = 1
 
     def load_data(self):
         if os.path.exists(DATA_FILE):
@@ -36,20 +36,10 @@ class MaksRepsBot(commands.Bot):
         return self.user_data[uid]
 
     async def setup_hook(self):
-        @self.tree.interaction_check
-        async def check_category(interaction: discord.Interaction):
-            if not interaction.channel.category or interaction.channel.category_id != ALLOWED_CATEGORY_ID:
-                await interaction.response.send_message(
-                    f"❌ Tego bota można używać tylko w kategorii <#{ALLOWED_CATEGORY_ID}>!", 
-                    ephemeral=True
-                )
-                return False
-            return True
-
         await self.load_extension('event')
         await self.load_extension('admin')
         await self.tree.sync()
-        print("🚀 Maks Reps Event Online z Daily i HappyHour!")
+        print("✅ System Maks Reps zaktualizowany: Kasyno + Admin Panel")
 
 bot = MaksRepsBot()
 bot.run(TOKEN)
