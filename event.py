@@ -75,7 +75,7 @@ class Event(commands.Cog):
             desc += f"**#{i}** <@{uid}> - `{data.get('points', 0):.1f} pkt`\n"
         
         emb = discord.Embed(title="🏆 TOP 10 EVENTU", description=desc or "Brak danych", color=KOLOR_BIALY)
-        await interaction.response.send_message(embed=emb)
+        await interaction.response.send_message(emb)
 
     @app_commands.command(name="daily", description="Odbierz 15 pkt bonusu")
     async def daily(self, interaction: discord.Interaction):
@@ -128,13 +128,13 @@ class Event(commands.Cog):
                 ch = await inter.guild.create_text_channel(f"zgloszenie-{inter.user.name}", category=cat)
                 
                 emb = discord.Embed(color=KOLOR_BIALY, title="✨ NOWE ZGŁOSZENIE ✨")
-                emb.description = f"Witaj {inter.user.mention}!\n\nWybrałeś kategorię: **{select.values[0]}**\n\n> Prosimy o podesłanie dowodu wykonania zadania.\n> Administracja zaraz Ci pomoże! 🛡️"
+                emb.description = f"Witaj {inter.user.mention}!\n\nWybrałeś kategorię: **{select.values[0]}**\n\n> Podeślij dowód wykonania zadania.\n> Administracja sprawdzi go jak najszybciej! 🛡️"
                 emb.set_footer(text="Maks Reps System")
                 
                 await ch.send(f"{inter.user.mention} | @everyone", embed=emb)
-                await inter.response.send_message(f"✅ Twój ticket został otwarty: {ch.mention}", ephemeral=True)
+                await inter.response.send_message(f"✅ Ticket otwarty: {ch.mention}", ephemeral=True)
 
-        await interaction.response.send_message("✨ **Wybierz zadanie, które wykonałeś:**", view=TicketView(), ephemeral=True)
+        await interaction.response.send_message("✨ **Jakie zadanie wykonałeś?**", view=TicketView(), ephemeral=True)
 
 async def setup(bot):
     await bot.add_cog(Event(bot))
