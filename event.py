@@ -81,18 +81,18 @@ class Event(commands.Cog):
         embed = discord.Embed(title="Dostępne zadania", color=0x2b2d31)
         
         tasks = [
-            ("1. Rejestracja z linku", "WIELORAZOWE | 100 pkt"),
-            ("2. Zaproszenie 2 osób na serwer", "WIELORAZOWE | 100 pkt"),
-            ("3. Dodaj swojego haula na kanale", "WIELORAZOWE | 50 - 200 pkt"),
-            ("4. Zgłoszenie błędu", "WIELORAZOWE | 30 - 100 pkt"),
-            ("5. Podesłanie promki", "WIELORAZOWE | 30 - 100 pkt"),
-            ("6. Zamówienie paki", "JEDNORAZOWE | 500 pkt"),
-            ("7. Boost serwera", "JEDNORAZOWE | 150 pkt"),
-            ("8. Dodanie linku do discorda w bio", "JEDNORAZOWE | 30 pkt"),
-            ("9. Zalogowanie na strone", "JEDNORAZOWE | 100 pkt"),
-            ("10. Pobranie wtyczki w przeglądarce", "JEDNORAZOWE | 100 pkt"),
-            ("11. Obserwacja na tiktok", "JEDNORAZOWE | 30 pkt"),
-            ("12. Obserwacja na instagramie", "JEDNORAZOWE | 30 pkt")
+            ("📦 1. Zamówienie paki", "WIELORAZOWE | 500 pkt\nZgłoś raz na 24h."),
+            ("🔗 2. Rejestracja z linku", "WIELORAZOWE | 50 pkt\nZgłoś raz na 24h."),
+            ("👥 3. Zaproszenie 2 osób na serwer", "WIELORAZOWE | 100 pkt\nZgłoś raz na 24h."),
+            ("📹 4. Dodaj haula na kanale haule", "WIELORAZOWE | 50-200 pkt\nZgłoś raz na 24h."),
+            ("⚠️ 5. Zgłoszenie błędu", "WIELORAZOWE | 30-100 pkt\nZgłoś raz na 24h."),
+            ("📢 6. Podesłanie promki", "WIELORAZOWE | 30-100 pkt\nZgłoś raz na 24h."),
+            ("🚀 7. Boost serwera", "JEDNORAZOWE | 150 pkt"),
+            ("🌐 8. Dodanie linku do dc w bio", "JEDNORAZOWE | 30 pkt"),
+            ("🖥️ 9. Zalogowanie na strone", "JEDNORAZOWE | 100 pkt"),
+            ("📱 10. Obserwacja na tiktok", "JEDNORAZOWE | 30 pkt"),
+            ("📸 11. Obserwacja na instagramie", "JEDNORAZOWE | 30 pkt"),
+            ("♠️ 12. Blackjack (w /kasyno)", "Zależne od stawki (Wygrana x2.5)")
         ]
 
         for name, val in tasks:
@@ -107,20 +107,42 @@ class Event(commands.Cog):
         view = ui.View()
         select = ui.Select(placeholder="Wybierz zadanie...")
         
-        options = ["Paka", "Rejestracja", "Zaproszenia", "Haul", "Błąd", "Promka", "Boost", "Bio", "Strona", "Wtyczka", "Sociale"]
-        for opt in options:
-            select.add_option(label=opt, value=opt)
+        options = [
+            ("Zamówienie paczki", "Paka", "📦"),
+            ("Rejestracja z linku", "Rejestracja", "🔗"),
+            ("Zaproszenie 2 osób", "Zaproszenia", "👥"),
+            ("Dodanie haula", "Haul", "📹"),
+            ("Zgłoszenie błędu", "Błąd", "⚠️"),
+            ("Podesłanie promki", "Promka", "📢"),
+            ("Boost serwera", "Boost", "🚀"),
+            ("Link dc w bio", "Bio", "🌐"),
+            ("Zalogowanie na strone", "Strona", "🖥️"),
+            ("Obserwacja Sociali", "Sociale", "📱")
+        ]
+        
+        for label, val, emoji in options:
+            select.add_option(label=label, value=val, emoji=emoji)
         
         async def callback(inter: discord.Interaction):
             cat = inter.guild.get_channel(TICKET_CATEGORY_ID)
-            if not cat: return await inter.response.send_message("Błąd kategorii.", ephemeral=True)
+            if not cat: return await inter.response.send_message("Błąd kategorii ticketów.", ephemeral=True)
                 
             ch = await inter.guild.create_text_channel(f"zgloszenie-{inter.user.name}", category=cat)
-            emb = discord.Embed(title="Zglos wykonanie zadania", color=0x2b2d31)
-            emb.description = f"Wybrałeś zadanie: **{select.values[0]}**\nPrześlij dowód poniżej."
             
-            now = datetime.now().strftime("%H:%M")
-            emb.set_footer(text=f"{NAZWA_EVENTU} | Dziś o {now}")
+            # Budowanie wiadomości wewnątrz ticketa (na wzór zdjęcia)
+            emb = discord.Embed(color=0x3498db) # Niebieski kolor boczny
+            
+            # Główny napis
+            emb.title = "🎫 MAKS REPS × TICKET"
+            
+            # Treść wiadomości
+            selected_category_full = inter.user.name # Domyślnie
+            for label, val, _ in options:
+                if select.values[0] == val:
+                    selected_category_full = label.upper()
+                    break
+
+            emb.description = f"Witaj {inter.user.mention}!\n\nWybrałeś kategorię: **{selected_category_full}**.\n\nZaraz ktoś z administracji Ci pomoże."
             
             await ch.send(f"{inter.user.mention}", embed=emb)
             await inter.response.send_message(f"Otwarto ticket: {ch.mention}", ephemeral=True)
@@ -128,8 +150,8 @@ class Event(commands.Cog):
         select.callback = callback
         view.add_item(select)
         
-        emb_main = discord.Embed(title="Zglos wykonanie zadania", color=0x2b2d31)
-        emb_main.description = "Wybierz zadanie z listy poniżej, aby otworzyć ticket."
+        emb_main = discord.Embed(title="Zgłoś wykonanie zadania", color=0x2b2d31)
+        emb_main.description = "Wybierz zadanie z listy poniżej.\nPo wybraniu zostanie otwarty ticket do weryfikacji.\n\n*Możesz zgłosić jedno zadanie raz na 24h.*"
         
         now = datetime.now().strftime("%H:%M")
         emb_main.set_footer(text=f"{NAZWA_EVENTU} | Dziś o {now}")
