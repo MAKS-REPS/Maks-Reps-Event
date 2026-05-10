@@ -7,31 +7,27 @@ class Admin(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
-    @app_commands.command(name="daj_punkty", description="Dodaj punkty użytkownikowi")
+    @app_commands.command(name="daj", description="Dodaj punkty")
     @app_commands.checks.has_permissions(administrator=True)
-    async def daj_punkty(self, interaction: discord.Interaction, uzytkownik: discord.Member, ilosc: float):
-        d = self.bot.get_user(uzytkownik.id)
-        d["points"] += ilosc
+    async def daj(self, interaction: discord.Interaction, user: discord.Member, pkt: float):
+        d = self.bot.get_user(user.id)
+        d["points"] += pkt
         self.bot.save_data()
-        
-        emb = discord.Embed(description=f"✅ Dodano **{ilosc} pkt** dla {uzytkownik.mention}", color=0x00FF00)
-        await interaction.response.send_message(embed=emb)
+        await interaction.response.send_message(f"✅ Dodano **{pkt} pkt** dla {user.mention}", ephemeral=True)
 
-    @app_commands.command(name="zabierz_punkty", description="Zabierz punkty użytkownikowi")
+    @app_commands.command(name="odbierz_punkty", description="Zabierz punkty")
     @app_commands.checks.has_permissions(administrator=True)
-    async def zabierz_punkty(self, interaction: discord.Interaction, uzytkownik: discord.Member, ilosc: float):
-        d = self.bot.get_user(uzytkownik.id)
-        d["points"] = max(0, d["points"] - ilosc)
+    async def odbierz_punkty(self, interaction: discord.Interaction, user: discord.Member, pkt: float):
+        d = self.bot.get_user(user.id)
+        d["points"] = max(0, d["points"] - pkt)
         self.bot.save_data()
-        
-        emb = discord.Embed(description=f"✅ Zabrano **{ilosc} pkt** od {uzytkownik.mention}", color=0xFF0000)
-        await interaction.response.send_message(embed=emb)
+        await interaction.response.send_message(f"✅ Zabrano **{pkt} pkt** od {user.mention}", ephemeral=True)
 
     @app_commands.command(name="happyhour", description="Mnożnik punktów")
     @app_commands.checks.has_permissions(administrator=True)
-    async def happyhour(self, interaction: discord.Interaction, mnoznik: int, minuty: int):
+    async def hh(self, interaction: discord.Interaction, mnoznik: int, minuty: int):
         self.bot.point_multiplier = mnoznik
-        await interaction.response.send_message(f"⚡ Happy Hour x{mnoznik} aktywny przez {minuty} min!")
+        await interaction.response.send_message(f"⚡ HAPPY HOUR x{mnoznik} przez {minuty} min!")
         await asyncio.sleep(minuty * 60)
         self.bot.point_multiplier = 1
         await interaction.channel.send("⏳ Happy Hour zakończony.")
