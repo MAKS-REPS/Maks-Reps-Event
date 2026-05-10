@@ -11,7 +11,7 @@ NAZWA_EVENTU = "Maks Reps Event"
 ALLOWED_CHANNELS = [1468529379318698117, 1457763945631715456]
 KOLOR_BIALY = 0xffffff
 
-# Tabela poziomów (Punkty / 2)
+# Tabela poziomów (Punkty ze zdjęcia / 2)
 LEVEL_DATA = {
     3: 275, 5: 500, 6: 750, 7: 1000, 9: 1666.5, 10: 2000,
     12: 2600, 14: 3200, 15: 3500, 16: 3916.5, 17: 4333.5, 18: 4750,
@@ -43,6 +43,7 @@ class Event(commands.Cog):
     async def on_message(self, message):
         if message.author.bot or not getattr(self.bot, 'event_active', True): 
             return
+        # Punkty tylko na wybranych kanałach
         if message.channel.id not in ALLOWED_CHANNELS:
             return
 
@@ -54,6 +55,7 @@ class Event(commands.Cog):
         if now - self.cooldowns.get(uid, 0) > 5:
             d["points"] = d.get("points", 0) + 2
             self.cooldowns[uid] = now
+            # ZAPISUJEMY ZMIANY DO PLIKU
             self.bot.save_data()
 
     @app_commands.command(name="profil", description="Pokazuje statystyki twojego konta")
