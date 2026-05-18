@@ -5,13 +5,12 @@ from google import genai
 from google.genai import types
 import os
 import io
-import asyncio
 
 PROMPT_PRIVATE = """
 Jesteś osobistym, prywatnym doradcą AI na serwerze Maks Reps. Odpowiadasz błyskawicznie, konkretnie i zwięźle. Używaj emotek.
-Jeśli użytkownik prześle zdjęcie, zrób szybkie QC: oceń kształt, szwy, jakość, daj ocenę 1-10 i werdykt GL (Green Light) lub RL (Red Light).
+Jeśli użytkownik prześle zdjęcie, zrób szybkie QC: oceń kształt, szwy, jakość materiałów i ogólne wykonanie, dając ocenę 1-10 oraz werdykt GL (Green Light) lub RL (Red Light).
 
-TWOJA BAZA WIEDZY:
+TWOJA BAZA WIEDZY O BATCHACH:
 - Nike Dunk -> M Batch
 - Jordan 4 -> GX Batch (Black Cat, Military, Pine Green)
 - Jordan 1 -> LJR (PK 4.0 dla modeli Travis Scott)
@@ -19,10 +18,17 @@ TWOJA BAZA WIEDZY:
 - New Balance / ASICS -> ZC Batch
 - Numeris -> W1 | Balenciaga Track -> OK | LV -> Foshan
 
+ZASADY: Skupiasz się wyłącznie na jakości, dopasowaniu (fitowaniu) i doborze najlepszych fabryk. Nigdy nie wspominaj o konkretnych cenach, kosztach, walutach ani kwotach zniżek.
+
 REFLINK I KUPONY:
 - Rejestracja: https://ikako.vip/r/maksr3ps
-- Kody: Maks.R3ps (-15$) | Maks20 (-20%)
+- Kody: Maks.R3ps | Maks20
 """
+
+# Tworzymy folder na bezpieczne logi na dysku bota, jeśli nie istnieje
+if not os.path.exists("ai_transcripts"):
+    os.makedirs("ai_transcripts")
+
 
 class TicketAddonsView(discord.ui.View):
     def __init__(self):
@@ -44,31 +50,33 @@ class TicketAddonsView(discord.ui.View):
         )
         await interaction.response.send_message(embed=embed, ephemeral=False)
 
-    @discord.ui.button(label="💸 Kupony i Kody rabatowe", style=discord.ButtonStyle.success, custom_id="faq_kupony")
+    @discord.ui.button(label="🎁 Link do Agenta & Kody", style=discord.ButtonStyle.success, custom_id="faq_kupony")
     async def faq_kupony(self, interaction: discord.Interaction, button: discord.ui.Button):
         embed = discord.Embed(
-            title="💸 Kody Rabatowe i Darmowe Kupony",
+            title="🎁 Rejestracja u Agenta i Bonusy",
             description="🎁 [Zarejestruj się klikając tutaj](https://ikako.vip/r/maksr3ps)\n\n"
-                        "🔥 **Kody rabatowe:**\n"
-                        "• Kod na **-$15**: `Maks.R3ps`\n"
-                        "• Kod na **-20%**: `Maks20`",
+                        "🔥 **Kody zniżkowe do użycia przy wysyłce paczki:**\n"
+                        "• Pierwszy kod: `Maks.R3ps`\n"
+                        "• Drugi kod: `Maks20`",
             color=0x2ecc71
         )
         await interaction.response.send_message(embed=embed, ephemeral=False)
 
 
+# 🔥 ZMIANA: Ciche i natychmiastowe usuwanie bez śladów na czacie
 class ChatCloseView(discord.ui.View):
     def __init__(self):
         super().__init__(timeout=None)
 
     @discord.ui.button(label="🔒 Zamknij i usuń chat", style=discord.ButtonStyle.danger, custom_id="close_ai_chat_prod")
     async def close_chat(self, interaction: discord.Interaction, button: discord.ui.Button):
-        await interaction.response.send_message("⚙️ Generowanie archiwum i usuwanie kanału za 3 sekundy...", ephemeral=False)
+        # Od razu dajemy odpowiedź Discordowi, żeby bot nie wisiał (użytkownik tego nie zauważy, bo kanał zaraz zniknie)
+        await interaction.response.defer()
         
         channel = interaction.channel
-        guild = interaction.guild
         user_name = channel.name.replace("🧠-chat-", "")
         
+        # Generowanie transkrypcji w tle do tajnego pliku lokalnego
         transcript_text = f"=== ARCHIWUM ROZMOWY AI: {user_name.upper()} ===\n\n"
         async for msg in channel.history(limit=150, oldest_first=True):
             if msg.embeds and "Twój Prywatny Ekspert AI" in (msg.embeds[0].title or ""):
@@ -80,24 +88,12 @@ class ChatCloseView(discord.ui.View):
             
         transcript_text += "=== KONIEC ZAPISU ==="
         
-        log_channel_id = os.getenv("AI_CHANNEL_ID")
-        if log_channel_id:
-            try:
-                log_channel = guild.get_channel(int(log_channel_id))
-                if log_channel:
-                    file_stream = io.BytesIO(transcript_text.encode('utf-8'))
-                    discord_file = discord.File(fp=file_stream, filename=f"chat-{user_name}.txt")
-                    
-                    log_embed = discord.Embed(
-                        title="🔒 Zamknięto Pokój AI",
-                        description=f"Kanał użytkownika: **{user_name}**\nZamknięty przez: <@{interaction.user.id}>\nPełny zapis rozmowy znajdziesz w pliku poniżej.",
-                        color=0xe74c3c
-                    )
-                    await log_channel.send(embed=log_embed, file=discord_file)
-            except Exception as e:
-                print(f"❌ [BŁĄD LOGOWANIA] {e}")
+        # Zapisujemy plik tekstowy na stałe w ukrytym folderze serwera Railway
+        file_path = f"ai_transcripts/chat-{user_name}.txt"
+        with open(file_path, "w", encoding="utf-8") as f:
+            f.write(transcript_text)
 
-        await asyncio.sleep(3)
+        # Natychmiastowe, bezgłośne skasowanie kanału
         await channel.delete()
 
 
@@ -125,14 +121,13 @@ class ChatCreateView(discord.ui.View):
             guild.me: discord.PermissionOverwrite(read_messages=True, send_messages=True)
         }
 
-        # ZAKODOWANA POPRAWKA ATTRYBUTU KATEGORII
         category = interaction.channel.category if hasattr(interaction.channel, 'category') else None
         new_channel = await guild.create_text_channel(name=channel_name, overwrites=overwrites, category=category)
         
         welcome_embed = discord.Embed(
             title="🧠 Twój Prywatny Ekspert AI",
             description=f"Siemanko <@{user.id}>! Napisz poniżej swoje pytanie lub **użyj komendy `/zapytaj_ai`** aby uzyskać odpowiedź lub zrobić **QC zdjęcia**!\n\n"
-                        f"• Kiedy skończiesz rozmowę, kliknij czerwony przycisk poniżej, aby usunąć ten kanał.",
+                        f"• Kiedy skończiesz rozmowę, kliknij czerwony przycisk poniżej, aby zamknąć ten kanał.",
             color=0x5865F2
         )
         
@@ -157,16 +152,31 @@ class PrivateChatCog(commands.Cog):
     async def setup_ai_panel(self, interaction: discord.Interaction):
         embed = discord.Embed(
             title="🧠 PRYWATNY SYSTEM WSPARCIA AI × MAKS REPS",
-            description="Potrzebujesz ekspresowej pomocy eksperta modowego? Chcesz sprawdzić jakość swoich replik ze zdjęć od agenta?\n\n"
+            description="Potrzebujesz ekspresowej pomocy eksperta modowego? Chcesz sprawdzić jakość swoich przedmiotów ze zdjęć od agenta?\n\n"
                         "### 🪐 Co potrafi nasz system AI?\n"
-                        "• **Natychmiastowe QC:** Wyślij zdjęcie, a bot sprawdzi szwy, kształt i wystawi werdykt **GL/RL**.\n"
-                        "• **Dobór Batchy:** Pomoże dobrać najlepszą fabrykę pod wybrane buty lub ubrania.\n"
-                        "• **Wsparcie Techniczne:** Odpowie na pytania o cło, bezpieczne linie wysyłkowe i deklaracje.\n\n"
+                        "• **Natychmiastowe QC:** Wyślij zdjęcie, a bot oceni detale, kształt i wystawi werdykt **GL/RL**.\n"
+                        "• **Dobór Batchy:** Pomoże dobrać najlepszą fabrykę pod konkretne modele butów lub ubrań.\n"
+                        "• **Wsparcie Techniczne:** Odpowie na pytania o statusy paczek, bezpieczne linie wysyłkowe i deklaracje.\n\n"
                         "📌 *Kliknij przycisk poniżej, aby utworzyć swój w pełni prywatny, zabezpieczony kanał 1-na-1.*",
             color=0x5865F2
         )
         embed.set_footer(text="Maks Reps • Inteligentny Asystent 24/7")
         await interaction.response.send_message(embed=embed, view=ChatCreateView())
+
+    # 🔥 NOWOŚĆ: Komenda tylko dla Ciebie do wyciągania logów usuniętych chatów
+    @app_commands.command(name="check_ai_bilety", description="Tylko dla Ownera: Pobiera archiwum czatu AI wybranego użytkownika.")
+    @app_commands.checks.has_permissions(administrator=True)
+    async def check_ai_bilety(self, interaction: discord.Interaction, nazwa_uzytkownika: str):
+        await interaction.response.defer(ephemeral=True) # Wynik zobaczysz tylko Ty
+        
+        clean_name = nazwa_uzytkownika.lower().strip().replace("@", "")
+        file_path = f"ai_transcripts/chat-{clean_name}.txt"
+        
+        if os.path.exists(file_path):
+            discord_file = discord.File(file_path)
+            await interaction.followup.send(f"📂 Znalazłem tajne archiwum rozmowy dla użytkownika: **{clean_name}**", file=discord_file, ephemeral=True)
+        else:
+            await interaction.followup.send(f"❌ Brak zapisanego czatu dla użytkownika: `{clean_name}`. Upewnij się, że wpisujesz jego dokładny nick z Discorda (np. `janusz123`).", ephemeral=True)
 
     @app_commands.command(name="zapytaj_ai", description="Zadaj pytanie asystentowi lub prześlij zdjęcie do szybkiego QC.")
     async def zapytaj_ai(self, interaction: discord.Interaction, pytanie: str, zdjecie: discord.Attachment = None):
