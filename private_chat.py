@@ -4,6 +4,8 @@ from discord.ext import commands
 from google import genai
 from google.genai import types
 import os
+import io
+import asyncio
 
 PROMPT_PRIVATE = """
 Jesteś osobistym, prywatnym doradcą AI na serwerze Maks Reps. Odpowiadasz błyskawicznie, konkretnie i zwięźle. Używaj emotek.
@@ -55,6 +57,50 @@ class TicketAddonsView(discord.ui.View):
         await interaction.response.send_message(embed=embed, ephemeral=False)
 
 
+class ChatCloseView(discord.ui.View):
+    def __init__(self):
+        super().__init__(timeout=None)
+
+    @discord.ui.button(label="🔒 Zamknij i usuń chat", style=discord.ButtonStyle.danger, custom_id="close_ai_chat_prod")
+    async def close_chat(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.send_message("⚙️ Generowanie archiwum i usuwanie kanału za 3 sekundy...", ephemeral=False)
+        
+        channel = interaction.channel
+        guild = interaction.guild
+        user_name = channel.name.replace("🧠-chat-", "")
+        
+        transcript_text = f"=== ARCHIWUM ROZMOWY AI: {user_name.upper()} ===\n\n"
+        async for msg in channel.history(limit=150, oldest_first=True):
+            if msg.embeds and "Twój Prywatny Ekspert AI" in (msg.embeds[0].title or ""):
+                continue
+            
+            author = "BOT (AI)" if msg.author.bot else f"UŻYTKOWNIK (@{msg.author.name})"
+            content = msg.embeds[0].description if (msg.author.bot and msg.embeds) else msg.content
+            transcript_text += f"[{msg.created_at.strftime('%Y-%m-%d %H:%M:%S')}] {author}: {content}\n\n"
+            
+        transcript_text += "=== KONIEC ZAPISU ==="
+        
+        log_channel_id = os.getenv("AI_CHANNEL_ID")
+        if log_channel_id:
+            try:
+                log_channel = guild.get_channel(int(log_channel_id))
+                if log_channel:
+                    file_stream = io.BytesIO(transcript_text.encode('utf-8'))
+                    discord_file = discord.File(fp=file_stream, filename=f"chat-{user_name}.txt")
+                    
+                    log_embed = discord.Embed(
+                        title="🔒 Zamknięto Pokój AI",
+                        description=f"Kanał użytkownika: **{user_name}**\nZamknięty przez: <@{interaction.user.id}>\nPełny zapis rozmowy znajdziesz w pliku poniżej.",
+                        color=0xe74c3c
+                    )
+                    await log_channel.send(embed=log_embed, file=discord_file)
+            except Exception as e:
+                print(f"❌ [BŁĄD LOGOWANIA] {e}")
+
+        await asyncio.sleep(3)
+        await channel.delete()
+
+
 class ChatCreateView(discord.ui.View):
     def __init__(self):
         super().__init__(timeout=None)
@@ -79,15 +125,17 @@ class ChatCreateView(discord.ui.View):
             guild.me: discord.PermissionOverwrite(read_messages=True, send_messages=True)
         }
 
-        category = interaction.channel.category
+        category = interaction.category if interaction.channel.category else None
         new_channel = await guild.create_text_channel(name=channel_name, overwrites=overwrites, category=category)
         
         welcome_embed = discord.Embed(
             title="🧠 Twój Prywatny Ekspert AI",
-            description=f"Siemanko <@{user.id}>! Napisz poniżej swoje pytanie lub **użyj komendy `/zapytaj_ai`** aby uzyskać błyskawiczną odpowiedź lub zrobić **QC zdjęcia**!",
+            description=f"Siemanko <@{user.id}>! Napisz poniżej swoje pytanie lub **użyj komendy `/zapytaj_ai`** aby uzyskać odpowiedź lub zrobić **QC zdjęcia**!\n\n"
+                        f"• Kiedy skończiesz rozmowę, kliknij czerwony przycisk poniżej, aby usunąć ten kanał.",
             color=0x5865F2
         )
-        await new_channel.send(embed=welcome_embed)
+        
+        await new_channel.send(embed=welcome_embed, view=ChatCloseView())
         await new_channel.send("⚡ **Szybkie informacje (widoczne dla wszystkich):**", view=TicketAddonsView())
         await interaction.followup.send(f"✅ Twój pokój AI: <#{new_channel.id}>", ephemeral=True)
 
@@ -100,25 +148,31 @@ class PrivateChatCog(commands.Cog):
 
     async def cog_load(self):
         self.bot.add_view(ChatCreateView())
+        self.bot.add_view(ChatCloseView())
         self.bot.add_view(TicketAddonsView())
 
+    # 🔥 NOWY, ODŚWIEŻONY EMOBED PANELU PANELU BILETÓW
     @app_commands.command(name="setup_ai_panel", description="Generuje panel biletów prywatnego AI.")
     @app_commands.checks.has_permissions(administrator=True)
     async def setup_ai_panel(self, interaction: discord.Interaction):
         embed = discord.Embed(
-            title="Prywatny Chat AI & System QC",
-            description="Kliknij przycisk poniżej, aby otworzyć swój osobisty panel szybkiego wsparcia AI.",
-            color=0x2f3136
+            title="🧠 PRYWATNY SYSTEM WSPARCIA AI × MAKS REPS",
+            description="Potrzebujesz ekspresowej pomocy eksperta modowego? Chcesz sprawdzić jakość swoich replik ze zdjęć od agenta?\n\n"
+                        "### 🪐 Co potrafi nasz system AI?\n"
+                        "• **Natychmiastowe QC:** Wyślij zdjęcie, a bot sprawdzi szwy, kształt i wystawi werdykt **GL/RL**.\n"
+                        "• **Dobór Batchy:** Pomoże dobrać najlepszą fabrykę pod wybrane buty lub ubrania.\n"
+                        "• **Wsparcie Techniczne:** Odpowie na pytania o cło, bezpieczne linie wysyłkowe i deklaracje.\n\n"
+                        "📌 *Kliknij przycisk poniżej, aby utworzyć swój w pełni prywatny, zabezpieczony kanał 1-na-1.*",
+            color=0x5865F2
         )
+        embed.set_footer(text="Maks Reps • Inteligentny Asystent 24/7")
         await interaction.response.send_message(embed=embed, view=ChatCreateView())
 
-    # 🔥 TA KOMENDA ROZWIĄZUJE PROBLEM: Ma wbudowany bezpiecznik prędkości i obsługę zdjęć
     @app_commands.command(name="zapytaj_ai", description="Zadaj pytanie asystentowi lub prześlij zdjęcie do szybkiego QC.")
     async def zapytaj_ai(self, interaction: discord.Interaction, pytanie: str, zdjecie: discord.Attachment = None):
         if not self.ai_client:
             return await interaction.response.send_message("❌ Błąd konfiguracji API.", ephemeral=True)
 
-        # ⚡ Kluczowe: Mówimy Discordowi, żeby poczekał na bota (brak crashu!)
         await interaction.response.defer(ephemeral=False)
 
         try:
