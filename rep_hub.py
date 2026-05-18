@@ -2,7 +2,6 @@ import discord
 from discord import app_commands
 from discord.ext import commands
 
-# 🎨 Dane do błyskawicznego ładowania w menu (Zero opóźnień)
 BATCH_DATA = {
     "jordans": {
         "title": "👑 TOP BATCHE: KOLEKCJA JORDAN",
@@ -38,13 +37,14 @@ BATCH_DATA = {
 
 class HubDropdown(discord.ui.Select):
     def __init__(self):
+        # STUPOPROCENTOWO POPRAWNA STRUKTURA OPCJI DROPDOWNA
         options = [
             discord.SelectOption(label="Kolekcja Jordan", description="J1, J3, J4, J11", emoji="👑", value="jordans"),
             discord.SelectOption(label="Yeezy & Dunki", description="Klasyki i wygoda", emoji="👟", value="yeezy_dunk"),
             discord.SelectOption(label="Balenciaga & Luxury", description="Marki luksusowe, LV, Mihara", emoji="💸", value="designer"),
             discord.SelectOption(label="Asics & New Balance", description="Wygodne sneakery", emoji="🏃", value="running"),
         ]
-        super().__init__(placeholder="🔥 Wybierz markę/kategorię...", min_values=1, max_values=1, custom_id="hub_dropdown_prod")
+        super().__init__(placeholder="🔥 Wybierz markę/kategorię...", min_values=1, max_values=1, custom_id="hub_dropdown_prod", options=options)
 
     async def callback(self, interaction: discord.Interaction):
         selection = self.values[0]
@@ -94,7 +94,6 @@ class RepHubCog(commands.Cog):
     @app_commands.command(name="setup_hub", description="Generuje efektowne, interaktywne Centrum Wiedzy Maks Reps.")
     @app_commands.checks.has_permissions(administrator=True)
     async def setup_hub(self, interaction: discord.Interaction):
-        # ⚡ Bezpiecznik anty-timeout: Mówimy Discordowi, żeby natychmiast wrzucił stan oczekiwania
         await interaction.response.defer(ephemeral=False)
 
         try:
@@ -106,7 +105,6 @@ class RepHubCog(commands.Cog):
                             "• Potrzebujesz zaawansowanej pomocy? Użyj `/setup_ai_panel` aby otworzyć prywatny czat AI.",
                 color=0x2f3136
             )
-            # Używamy followup.send, ponieważ wcześniej użyliśmy defer()
             await interaction.followup.send(embed=embed, view=HubView())
         except Exception as e:
             print(f"❌ [BŁĄD HUB SETUP] {e}")
