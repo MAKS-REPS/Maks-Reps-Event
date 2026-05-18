@@ -1,11 +1,9 @@
 import discord
-from discord import app_commands
 from discord.ext import commands
 from google import genai
 from google.genai import types
 import os
 
-# Definiujemy instrukcję systemową – tutaj programujemy "mózg" bota, jego wiedzę o Kakobuy i repach
 PROMPT_EKSPERTA = """
 Jesteś specjalistą AI ds. Kakobuy, ubrań streetwearowych oraz replik (repów) na serwerze Maks Reps.
 Twoim zadaniem jest odpowiadanie użytkownikom na wszystkie pytania związane z:
@@ -16,55 +14,79 @@ Twoim zadaniem jest odpowiadanie użytkownikom na wszystkie pytania związane z:
 Zasady zachowania:
 - Odpowiadaj zwięźle, konkretnie i używaj emotek (np. 📦, 👟, ✈️), aby wiadomości były czytelne.
 - Pisz w języku polskim, luźnym ale pomocnym tonem (jak ziomek z serwera).
-- Jeśli ktoś pyta o rzeczy całkowicie niezwiązane z ubraniami, repami czy Kakobuy, dyplomatycznie przypomnij mu, że jesteś ekspertem od mody i zakupów i chętnie pomożesz w tym temacie.
+- Jeśli ktoś pyta o rzeczy całkowicie niezwiązane z ubraniami, repami czy Kakobuy, dyplomatycznie przypomnij mu, że jesteś ekspertem od mody i zakupów.
 """
 
-class AiExpert(commands.Cog):
+# Lista słów kluczowych. Bot zareaguje na zwykłą wiadomość tylko jeśli zawiera ona choć jedno z tych słów.
+SLOWA_KLUCZOWE = [
+    "batch", "kakobuy", "wysylka", "wysyłka", "paczka", "rep", "reps", "replik", 
+    "jordan", "j4", "j1", "dunk", "travis", "wtc", "w2c", "agent", "zamowic", "zamówić",
+    "status", "linia", "tax free", "bezclowa", "bezcłowa", "vouch", "batcha", "batche"
+]
+
+class AiAutoResponder(commands.Cog):
     def __init__(self, bot: commands.Bot):
         self.bot = bot
-        # Inicjalizacja klienta Gemini przy użyciu oficjalnej biblioteki google-genai
         api_key = os.getenv("GEMINI_API_KEY")
         if api_key:
             self.client = genai.Client(api_key=api_key)
         else:
             self.client = None
-            print("❌ BŁĄD AI: Brak GEMINI_API_KEY w pliku .env! Moduł AI nie będzie działać.")
+            print("❌ BŁĄD AI: Brak GEMINI_API_KEY!")
 
-    @app_commands.command(name="ai", description="Zadaj pytanie asystentowi ds. Kakobuy, repów i wysyłek!")
-    @app_commands.describe(pytanie="Wpisz swoje pytanie (np. Ile idzie paczka? Jaki batch na Jordany 4?)")
-    async def ai_ask(self, interaction: discord.Interaction, pytanie: str):
+    @commands.Cog.listener()
+    async def on_message(self, message: discord.Message):
+        # 1. Ignoruj wiadomości wysłane przez same boty (żeby bot nie rozmawiał sam ze sobą)
+        if message.author.bot:
+            return
+
+        # 2. BLOKADA KANAŁU: Pobieramy ID dozwolonego kanału z Railway
+        allowed_channel_env = os.getenv("AI_CHANNEL_ID")
+        if not allowed_channel_env:
+            return  # Jeśli nie ustawiłeś kanału w Railway, bot na wszelki wypadek nic nie robi
+            
+        if message.channel.id != int(allowed_channel_env):
+            return  # Jeśli to inny kanał, ignorujemy wiadomość
+
         if not self.client:
-            return await interaction.response.send_message("❌ Funkcja AI jest obecnie niedostępna (brak konfiguracji API).", ephemeral=True)
+            return
 
-        # Informujemy użytkownika i Discorda, że bot "myśli" (generowanie odpowiedzi może zająć 1-3 sekundy)
-        await interaction.response.defer()
+        # 3. SPRAWDZENIE SŁÓW KLUCZOWYCH: Zamieniamy tekst na małe litery, żeby wielkość nie miała znaczenia
+        tresc_wiadomosci = message.content.lower()
+        zawiera_slowo_kluczowe = any(slowo in tresc_wiadomosci for slowo in SLOWA_KLUCZOWE)
 
-        try:
-            # Wywołanie modelu Gemini 2.5 Flash z instrukcją systemową
-            response = self.client.models.generate_content(
-                model='gemini-2.5-flash',
-                contents=pytanie,
-                config=types.GenerateContentConfig(
-                    system_instruction=PROMPT_EKSPERTA,
-                    temperature=0.7 # Odpowiednia elastyczność i kreatywność
+        # Jeśli użytkownik nie pyta o nic z naszej listy tematów, bot milczy
+        if not zawiera_slowo_kluczowe:
+            return
+
+        # 4. REAKCJA I GENEROWANIE ODPOWIEDZI
+        # Uruchamiamy status "typing..." (bot pisze...), żeby użytkownik widział, że AI generuje odpowiedź
+        async with message.channel.typing():
+            try:
+                # Wywołanie modelu Gemini (używamy wersji synchronicznej, bo tak działa domyślnie klient google-genai)
+                response = self.client.models.generate_content(
+                    model='gemini-2.5-flash',
+                    contents=message.content,
+                    config=types.GenerateContentConfig(
+                        system_instruction=PROMPT_EKSPERTA,
+                        temperature=0.7
+                    )
                 )
-            )
-            
-            # Składamy odpowiedź w ładny Embed
-            embed = discord.Embed(
-                title="🤖 ASYSTENT AI × MAKS REPS",
-                description=response.text,
-                color=0x3498db
-            )
-            embed.add_field(name="❓ Twoje pytanie:", value=f"*{pytanie}*", inline=False)
-            embed.set_footer(text="Odpowiedzi generowane automatycznie przez AI. Zawsze weryfikuj ważne informacje na poradnikach.")
-            
-            # Wysyłamy gotową odpowiedź
-            await interaction.followup.send(embed=embed)
+                
+                # Budowanie ładnej odpowiedzi w Embedzie
+                embed = discord.Embed(
+                    title="🤖 ASYSTENT AI × MAKS REPS",
+                    description=response.text,
+                    color=0x2ecc71 # Zielony kolor dla auto-respondera
+                )
+                embed.set_footer(text=f"Odpowiedź dla @{message.author.name} • Czat automatyczny AI")
+                
+                # Odpowiadamy bezpośrednio, oznaczając (pingując) osobę zadającą pytanie
+                await message.reply(embed=embed)
 
-        except Exception as e:
-            print(f"Błąd podczas generowania odpowiedzi AI: {e}")
-            await interaction.followup.send("❌ Wystąpił błąd podczas przetwarzania pytania przez AI. Spróbuj ponownie później.")
+            except Exception as e:
+                print(f"Błąd podczas automatycznego generowania AI: {e}")
+                # W razie błędu nie spamujemy kanału, błąd odłoży się w logach Railway
 
 async def setup(bot: commands.Bot):
-    await bot.add_cog(AiExpert(bot))
+    await bot.add_cog(AiAutoResponder(bot))
