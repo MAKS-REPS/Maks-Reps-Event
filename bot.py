@@ -5,41 +5,34 @@ from dotenv import load_dotenv
 
 load_dotenv()
 TOKEN = os.getenv('DISCORD_TOKEN')
-GUILD_ID = os.getenv('GUILD_ID')
 
 class GłównyBot(commands.Bot):
     def __init__(self):
+        # Intents są WYMAGANE. Upewnij się, że włączyłeś je w Discord Developer Portal!
         intents = discord.Intents.all()
         super().__init__(command_prefix="!", intents=intents)
 
     async def setup_hook(self):
-        # 🔗 Łącznik ładuje dwa osobne moduły AI na raz
         moduly = ['ai_expert', 'private_chat']
-        
         for modul in moduly:
             try:
                 await self.load_extension(modul)
-                print(f"✅ Pomyślnie załadowano moduł: {modul}.py")
+                print(f"✅ Załadowano moduł: {modul}")
             except Exception as e:
-                print(f"❌ Błąd podczas ładowania modułu {modul}.py: {e}")
+                print(f"❌ BŁĄD ładowania modułu {modul}: {e}")
 
-        # Synchronizacja komend slash
-        if GUILD_ID:
-            guild = discord.Object(id=int(GUILD_ID))
-            self.tree.copy_global_to(guild=guild)
-            await self.tree.sync(guild=guild)
-            print(f"✅ Komendy zsynchronizowane dla serwera: {GUILD_ID}")
-        else:
-            await self.tree.sync()
+        # Wymuszamy synchronizację komend slash
+        await self.tree.sync()
+        print("✅ Komendy (Slash) zsynchronizowane!")
 
 bot = GłównyBot()
 
 @bot.event
 async def on_ready():
-    print(f"🚀 Bot Maks Reps AI wystartował! Zalogowano jako {bot.user}")
+    print(f"🚀 Bot gotowy i podłączony jako: {bot.user}")
 
 if __name__ == "__main__":
     if TOKEN:
         bot.run(TOKEN)
     else:
-        print("❌ Brak TOKENU bota! Sprawdź zmienne w panelu Railway.")
+        print("❌ Brak tokenu bota w Railway!")
