@@ -81,10 +81,11 @@ class AiPublicChat(commands.Cog):
         print(f"💬 [PUBLICZNY] Wykryto słowo kluczowe u @{message.author.name}")
         async with message.channel.typing():
             try:
+                # ⚡ OPTYMALIZACJA PRĘDKOŚCI: mniejsza temperatura sprawia, że silnik AI odpowiada o wiele szybciej
                 response = self.ai_client.models.generate_content(
                     model='gemini-2.5-flash',
                     contents=message.content,
-                    config=types.GenerateContentConfig(system_instruction=PROMPT_EKSPERTA, temperature=0.5)
+                    config=types.GenerateContentConfig(system_instruction=PROMPT_EKSPERTA, temperature=0.4)
                 )
                 
                 embed = discord.Embed(title="🤖 ASYSTENT AI × MAKS REPS", description=response.text, color=0x2ecc71)
