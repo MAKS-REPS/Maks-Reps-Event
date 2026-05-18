@@ -89,23 +89,27 @@ class RepHubCog(commands.Cog):
         self.bot = bot
 
     async def cog_load(self):
-        # Rejestracja widoku dla trwałych przycisków po restarcie
         self.bot.add_view(HubView())
 
-    # Komenda globalna Slash /setup_hub
     @app_commands.command(name="setup_hub", description="Generuje efektowne, interaktywne Centrum Wiedzy Maks Reps.")
     @app_commands.checks.has_permissions(administrator=True)
     async def setup_hub(self, interaction: discord.Interaction):
-        # Wysyłamy odpowiedź natychmiast, żeby uniknąć błędu "Aplikacja nie reaguje"
-        embed = discord.Embed(
-            title="⚡ MULTIMEDIALNE CENTRUM WIEDZY — MAKS REPS",
-            description="Witamy w oficjalnym i najszybszym hubie informacyjnym serwera!\n\n"
-                        "• **Użyj menu rozwijanego poniżej**, aby sprawdzić najlepsze batche.\n"
-                        "• **Użyj przycisków**, aby wyświetlić poradniki wysyłkowe i celne.\n"
-                        "• Potrzebujesz zaawansowanej pomocy? Użyj `/setup_ai_panel` aby otworzyć prywatny czat AI.",
-            color=0x2f3136
-        )
-        await interaction.response.send_message(embed=embed, view=HubView())
+        # ⚡ Bezpiecznik anty-timeout: Mówimy Discordowi, żeby natychmiast wrzucił stan oczekiwania
+        await interaction.response.defer(ephemeral=False)
+
+        try:
+            embed = discord.Embed(
+                title="⚡ MULTIMEDIALNE CENTRUM WIEDZY — MAKS REPS",
+                description="Witamy w oficjalnym i najszybszym hubie informacyjnym serwera!\n\n"
+                            "• **Użyj menu rozwijanego poniżej**, aby sprawdzić najlepsze batche.\n"
+                            "• **Użyj przycisków**, aby wyświetlić poradniki wysyłkowe i celne.\n"
+                            "• Potrzebujesz zaawansowanej pomocy? Użyj `/setup_ai_panel` aby otworzyć prywatny czat AI.",
+                color=0x2f3136
+            )
+            # Używamy followup.send, ponieważ wcześniej użyliśmy defer()
+            await interaction.followup.send(embed=embed, view=HubView())
+        except Exception as e:
+            print(f"❌ [BŁĄD HUB SETUP] {e}")
 
 async def setup(bot: commands.Bot):
     await bot.add_cog(RepHubCog(bot))
