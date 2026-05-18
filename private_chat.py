@@ -7,7 +7,7 @@ import os
 import io
 
 PROMPT_EKSPERTA_PRIVATE = """
-Jesteś osobistym, prywatnym doradcą AI na serwerze Maks Reps. Jesteś najbardziej zaawansowanym botem modowym na świecie.
+Jesteś osobistym, prywatnym doradcą AI na serwerze Maks Reps. Jesteś najinteligentniejszym botem modowym na świecie.
 Rozmawiasz na prywatnym kanale 1-na-1. Masz potężną wiedzę ogólną o:
 - Wyborze odpowiednich ubrań i składaniu outfitów (możesz działać jak osobisty stylista).
 - Rozmiarówkach butów i ubrań (co fituje True To Size, gdzie trzeba zrobić size up).
@@ -34,6 +34,7 @@ KUPONY (Przypominaj o nich dyskretnie przy tematach zakupowych):
 Pamiętasz całą historię rozmowy. Bądź niezwykle inteligentny, pomocny, ale rozmawiaj na luzie, jak starszy ziomek z serwera. Używaj emotek.
 """
 
+# Widok Szybkich Akcji (FAQ) - TERAZ SĄ TO STAŁE WIADOMOŚCI DLA KAŻDEGO (ephemeral=False)
 class TicketAddonsView(discord.ui.View):
     def __init__(self):
         super().__init__(timeout=None)
@@ -52,7 +53,8 @@ class TicketAddonsView(discord.ui.View):
                         "• **Balenciaga (Track):** OK Batch | **(Runner):** VG Batch",
             color=0x9b59b6
         )
-        await interaction.response.send_message(embed=embed, ephemeral=True)
+        # ephemeral=False sprawia, że wiadomość zostaje na czacie na stałe!
+        await interaction.response.send_message(embed=embed, ephemeral=False)
 
     @discord.ui.button(label="💸 Kupony i Kody rabatowe", style=discord.ButtonStyle.success, custom_id="faq_kupony")
     async def faq_kupony(self, interaction: discord.Interaction, button: discord.ui.Button):
@@ -64,7 +66,8 @@ class TicketAddonsView(discord.ui.View):
                         "• Kod na **-20%**: `Maks20`",
             color=0x2ecc71
         )
-        await interaction.response.send_message(embed=embed, ephemeral=True)
+        # ephemeral=False sprawia, że wiadomość zostaje na czacie na stałe!
+        await interaction.response.send_message(embed=embed, ephemeral=False)
 
 
 class ChatCloseView(discord.ui.View):
@@ -197,7 +200,8 @@ class PrivateChatCog(commands.Cog):
         async with message.channel.typing():
             try:
                 history_contents = []
-                async for msg in message.channel.history(limit=15, oldest_first=True):
+                # ⚡ OPTYMALIZACJA PRĘDKOŚCI: limit=8 zamiast 15 pozwala botowi reagować natychmiastowo!
+                async for msg in message.channel.history(limit=8, oldest_first=True):
                     if msg.embeds and "Twój Prywatny Ekspert AI" in (msg.embeds[0].title or ""):
                         continue
                     if msg.content.startswith("⚡ **Szybkie akcje"):
@@ -215,7 +219,7 @@ class PrivateChatCog(commands.Cog):
                 response = self.ai_client.models.generate_content(
                     model='gemini-2.5-flash',
                     contents=history_contents,
-                    config=types.GenerateContentConfig(system_instruction=PROMPT_EKSPERTA_PRIVATE, temperature=0.6)
+                    config=types.GenerateContentConfig(system_instruction=PROMPT_EKSPERTA_PRIVATE, temperature=0.5)
                 )
                 
                 embed = discord.Embed(title="🤖 ASYSTENT AI × MAKS REPS", description=response.text, color=0x5865F2)
