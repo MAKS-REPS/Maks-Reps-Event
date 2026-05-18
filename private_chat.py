@@ -5,14 +5,18 @@ from google import genai
 from google.genai import types
 import os
 import io
+import aiohttp
 
 PROMPT_EKSPERTA_PRIVATE = """
 Jesteś osobistym, prywatnym doradcą AI na serwerze Maks Reps. Jesteś najinteligentniejszym botem modowym na świecie.
-Rozmawiasz na prywatnym kanale 1-na-1. Masz potężną wiedzę ogólną o:
-- Wyborze odpowiednich ubrań i składaniu outfitów (możesz działać jak osobisty stylista).
-- Rozmiarówkach butów i ubrań (co fituje True To Size, gdzie trzeba zrobić size up).
-- Tłumaczeniu statusów przesyłek z Chin, cłach, deklaracjach i procesie wysyłki (Kakobuy, inni agenci).
-- Jakości replik, wyłapywaniu wad na zdjęciach (flaws, stitching, shape).
+Rozmawiasz na prywatnym kanale 1-na-1. Masz potężną wiedzę ogólną o modzie ulicznej, rozmiarach i logistyce z Chin.
+
+ZASADA SPECJALNA (SKANER ZDJĘĆ / QC):
+Jeśli użytkownik prześle zdjęcie butów, ubrań lub dodatków, Twoim zadaniem jest przeprowadzić profesjonalny Quality Check (QC).
+1. Oceń ogólny kształt (shape) i toebox.
+2. Zwróć uwagę na jakość szwów (stitching) oraz umiejscowienie logotypów (np. swoosh, Air Jordan wing logo).
+3. Wydaj werdykt w skali 1-10 i napisz czy to GL (Green Light - brać) czy RL (Red Light - zwracać do sprzedawcy z powodu wad).
+Pamiętaj, że zdjęcia pochodzą zazwyczaj z chińskich magazynów agentów (Kakobuy itp.).
 
 TWOJA OFICJALNA BAZA "BEST BATCHÓW" (Zawsze się jej trzymaj):
 - Nike Dunk / Dunk Low -> **M Batch**
@@ -24,17 +28,14 @@ TWOJA OFICJALNA BAZA "BEST BATCHÓW" (Zawsze się jej trzymaj):
 - Numeris -> **W1** | Balenciaga Track -> **OK** | Balenciaga Runner -> **VG**
 - Louis Vuitton -> **Foshan** lub **Villian/Pone**
 
-Dla butów spoza tej listy - użyj swojej ogólnej wiedzy AI, by doradzić najlepszy batch dostępny na rynku.
-
-KUPONY (Przypominaj o nich dyskretnie przy tematach zakupowych):
-1. Zarejestruj się by zgarnąć darmowe kupony: https://ikako.vip/r/maksr3ps
+KUPONY:
+1. Rejestracja: https://ikako.vip/r/maksr3ps
 2. Kod -15$: Maks.R3ps
 3. Kod -20%: Maks20
 
-Pamiętasz całą historię rozmowy. Bądź niezwykle inteligentny, pomocny, ale rozmawiaj na luzie, jak starszy ziomek z serwera. Używaj emotek.
+Mów luźno, konkretnie, ekspercko i używaj emotek (👟, 📸, ⚖️, 🔥).
 """
 
-# Widok Szybkich Akcji (FAQ) - TERAZ SĄ TO STAŁE WIADOMOŚCI DLA KAŻDEGO (ephemeral=False)
 class TicketAddonsView(discord.ui.View):
     def __init__(self):
         super().__init__(timeout=None)
@@ -53,7 +54,6 @@ class TicketAddonsView(discord.ui.View):
                         "• **Balenciaga (Track):** OK Batch | **(Runner):** VG Batch",
             color=0x9b59b6
         )
-        # ephemeral=False sprawia, że wiadomość zostaje na czacie na stałe!
         await interaction.response.send_message(embed=embed, ephemeral=False)
 
     @discord.ui.button(label="💸 Kupony i Kody rabatowe", style=discord.ButtonStyle.success, custom_id="faq_kupony")
@@ -66,7 +66,6 @@ class TicketAddonsView(discord.ui.View):
                         "• Kod na **-20%**: `Maks20`",
             color=0x2ecc71
         )
-        # ephemeral=False sprawia, że wiadomość zostaje na czacie na stałe!
         await interaction.response.send_message(embed=embed, ephemeral=False)
 
 
@@ -85,6 +84,8 @@ class ChatCloseView(discord.ui.View):
         transcript_text = f"=== TRANSKRYPCJA CZATU AI DLA UŻYTKOWNIKA: {user_name.upper()} ===\n\n"
         async for msg in channel.history(limit=100, oldest_first=True):
             if msg.embeds and "Twój Prywatny Ekspert AI" in (msg.embeds[0].title or ""):
+                continue
+            if msg.content.startswith("⚡ **Szybkie akcje"):
                 continue
             
             author = "BOT (AI)" if msg.author.bot else f"UŻYTKOWNIK (@{msg.author.name})"
@@ -144,10 +145,10 @@ class ChatCreateView(discord.ui.View):
             new_channel = await guild.create_text_channel(name=channel_name, overwrites=overwrites, category=category)
             
             welcome_embed = discord.Embed(
-                title="🧠 Twój Prywatny Ekspert AI",
+                title="🧠 Twój Prywatny Ekspert AI & Wizualne QC",
                 description=f"Siemanko <@{user.id}>! Trafiłeś do prywatnego pokoju rozmów z AI.\n\n"
-                            f"• Jestem tu, aby pomóc Ci we wszystkim – od wyboru idealnego batcha, po pomoc z agentem.\n"
-                            f"• Znam się na fitach, rozmiarówkach i wysyłce.\n"
+                            f"• Odpowiadam na pytania tekstowe oraz **ANALIZUJĘ ZDJĘCIA**.\n"
+                            f"• **Wrzuć tutaj zdjęcie swoich butów z magazynu (QC)**, a ocenię ich jakość i dam werdykt GL/RL!\n"
                             f"• Możesz też użyć przycisków poniżej po szybkie odpowiedzi.",
                 color=0x5865F2
             )
@@ -176,11 +177,11 @@ class PrivateChatCog(commands.Cog):
     @app_commands.checks.has_permissions(administrator=True)
     async def setup_ai_panel(self, interaction: discord.Interaction):
         embed = discord.Embed(
-            title="Prywatny Chat AI",
+            title="Prywatny Chat AI & System QC",
             description="Kliknij przycisk poniżej, aby otworzyć **swój prywatny kanał AI**.\n\n"
                         "• Najmądrzejsze wsparcie modowe i techniczne\n"
-                        "• Szybkie przyciski FAQ w środku\n"
-                        "• Pełne wsparcie logistyczne",
+                        "• Inteligentny, automatyczny skaner zdjęć (Quality Check 1:1)\n"
+                        "• Szybkie przyciski FAQ w środku",
             color=0x2f3136
         )
         await interaction.response.send_message(embed=embed, view=ChatCreateView())
@@ -196,12 +197,30 @@ class PrivateChatCog(commands.Cog):
         if message.content.startswith("⚡ **Szybkie akcje"):
             return
 
-        print(f"🧠 [PRYWATNY] Budowanie kontekstu rozmowy dla @{message.author.name}...")
+        print(f"🧠 [PRYWATNY] Analizowanie wiadomości (Tekst + Media) dla @{message.author.name}...")
         async with message.channel.typing():
             try:
+                # 📷 OBSŁUGA MULTIMEDIÓW (Wzrok AI)
+                image_parts = []
+                if message.attachments:
+                    for attachment in message.attachments:
+                        # Sprawdzamy czy załączony plik to obrazek
+                        if attachment.content_type and attachment.content_type.startswith("image/"):
+                            async with aiohttp.ClientSession() as session:
+                                async with session.get(attachment.url) as resp:
+                                    if resp.status == 200:
+                                        img_data = await resp.read()
+                                        image_parts.append(
+                                            types.Part.from_bytes(
+                                                data=img_data,
+                                                mime_type=attachment.content_type
+                                            )
+                                        )
+                                        print(f"📸 [SUKCES] Pobrano obrazek do analizy AI: {attachment.name}")
+
+                # Pobieranie historii tekstowej dla zachowania pamięci czatu
                 history_contents = []
-                # ⚡ OPTYMALIZACJA PRĘDKOŚCI: limit=8 zamiast 15 pozwala botowi reagować natychmiastowo!
-                async for msg in message.channel.history(limit=8, oldest_first=True):
+                async for msg in message.channel.history(limit=6, oldest_first=True):
                     if msg.embeds and "Twój Prywatny Ekspert AI" in (msg.embeds[0].title or ""):
                         continue
                     if msg.content.startswith("⚡ **Szybkie akcje"):
@@ -211,18 +230,29 @@ class PrivateChatCog(commands.Cog):
                         bot_text = msg.embeds[0].description if msg.embeds else msg.content
                         history_contents.append(types.Content(role="model", parts=[types.Part.from_text(text=bot_text)]))
                     else:
-                        history_contents.append(types.Content(role="user", parts=[types.Part.from_text(text=msg.content)]))
+                        if msg.content:
+                            history_contents.append(types.Content(role="user", parts=[types.Part.from_text(text=msg.content)]))
 
-                if not history_contents or history_contents[-1].role != "user":
-                    history_contents.append(types.Content(role="user", parts=[types.Part.from_text(text=message.content)]))
+                # Przygotowanie ostatecznego zapytania
+                tekst_pytania = message.content if message.content else "Przeanalizuj to zdjęcie i zrób QC."
+                
+                # Jeśli są obrazki, łączymy tekst z obrazkami w ostatnim ruchu użytkownika
+                if image_parts:
+                    payload_parts = [types.Part.from_text(text=tekst_pytania)] + image_parts
+                    history_contents.append(types.Content(role="user", parts=payload_parts))
+                else:
+                    if not history_contents or history_contents[-1].role != "user":
+                        history_contents.append(types.Content(role="user", parts=[types.Part.from_text(text=tekst_pytania)]))
 
+                # Generowanie odpowiedzi przez potężne Gemini
                 response = self.ai_client.models.generate_content(
                     model='gemini-2.5-flash',
                     contents=history_contents,
-                    config=types.GenerateContentConfig(system_instruction=PROMPT_EKSPERTA_PRIVATE, temperature=0.5)
+                    config=types.GenerateContentConfig(system_instruction=PROMPT_EKSPERTA_PRIVATE, temperature=0.4)
                 )
                 
-                embed = discord.Embed(title="🤖 ASYSTENT AI × MAKS REPS", description=response.text, color=0x5865F2)
+                title_text = "📸 INTELIGENTNY WERDYKT QC" if image_parts else "🤖 ASYSTENT AI × MAKS REPS"
+                embed = discord.Embed(title=title_text, description=response.text, color=0x5865F2)
                 await message.reply(embed=embed)
             except Exception as e:
                 print(f"❌ [BŁĄD AI PRIVATE] {e}")
