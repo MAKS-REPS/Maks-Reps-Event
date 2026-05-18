@@ -37,7 +37,6 @@ BATCH_DATA = {
 
 class HubDropdown(discord.ui.Select):
     def __init__(self):
-        # STUPOPROCENTOWO POPRAWNA STRUKTURA OPCJI DROPDOWNA
         options = [
             discord.SelectOption(label="Kolekcja Jordan", description="J1, J3, J4, J11", emoji="👑", value="jordans"),
             discord.SelectOption(label="Yeezy & Dunki", description="Klasyki i wygoda", emoji="👟", value="yeezy_dunk"),
@@ -65,9 +64,9 @@ class HubView(discord.ui.View):
         embed = discord.Embed(
             title="📦 PORADNIK BEZPIECZNEJ DEKLARACJI",
             description="Aby Twoja paczka przeszła bezpiecznie przez urząd celny:\n\n"
-                        "1. **Linie Tax Free (Bezclowe):** Zawsze deklaruj przedział między **$16 a $21** (np. `18.34`, `19.52`). Używaj końcówek po przecinku!\n"
-                        "2. **Waga paczki:** Staraj się nie przekraczać **10kg** w jednej wysyłce.\n"
-                        "3. **Zabezpieczenia:** Zawsze dokupuj *Stretch Film* oraz *Corner Protection*.",
+                        "1. **Linie Tax Free (Bezclowe):** Deklaruj wartość paczki zgodnie z aktualnymi widełkami podanymi przez wybranego agenta. **Zawsze używaj losowych końcówek po przecinku** (np. zamiast równej kwoty wpisz końcówkę `.34` lub `.52`), co wygląda naturalnie dla systemu celnego.\n"
+                        "2. **Waga paczki:** Staraj się nie przekraczać wagi **10kg** w jednej wysyłce. Jeśli masz większe zakupy, bezpieczniej jest podzielić je na dwie osobne paczki.\n"
+                        "3. **Zabezpieczenia paczki:** W opcjach pakowania zawsze zaznaczaj **Stretch Film** (foliowanie) oraz **Corner Protection** (ochraniacze na rogi kartonu). Utrudnia to otwarcie paczki i chroni przed uszkodzeniem.",
             color=0x2ecc71
         )
         await interaction.response.send_message(embed=embed, ephemeral=False)
@@ -76,9 +75,9 @@ class HubView(discord.ui.View):
     async def btn_customs(self, interaction: discord.Interaction, button: discord.ui.Button):
         embed = discord.Embed(
             title="🛡️ STATUSY I UBEZPIECZENIE PACZKI",
-            description="• **Customs Clearance / Inbound into Customs:** Paczka jest sprawdzana. Przy liniach *Tax Free* to standardowa procedura – bez paniki.\n"
-                        "• **Zatrzymanie paczki?** Nigdy nie wysyłaj podrobionych dokumentów ani screenów bez konsultacji z administracją serwera!\n"
-                        "• **Ubezpieczenie (Insurance):** Zawsze zaznaczaj opcję ubezpieczenia u agenta podczas wysyłki. Kosztuje grosze, a chroni w 100%.",
+            description="• **Customs Clearance / Inbound into Customs:** Paczka przechodzi standardową weryfikację. Przy liniach *Tax Free* to w pełni rutynowa procedura.\n"
+                        "• **Weryfikacja dokumentów?** Nigdy nie generuj ani nie wysyłaj pism na własną rękę bez uprzedniej konsultacji z administracją serwera!\n"
+                        "• **Ubezpieczenie (Insurance):** Zawsze zaznaczaj opcję pełnego ubezpieczenia przesyłki u agenta podczas wysyłki dla pełnego bezpieczeństwa.",
             color=0xe74c3c
         )
         await interaction.response.send_message(embed=embed, ephemeral=False)
