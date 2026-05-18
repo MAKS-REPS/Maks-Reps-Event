@@ -3,54 +3,42 @@ from discord.ext import commands
 import os
 from dotenv import load_dotenv
 
-# Ładowanie zmiennych środowiskowych (.env / Railway Variables)
 load_dotenv()
 TOKEN = os.getenv('DISCORD_TOKEN')
 
 class ElitarnyBotAI(commands.Bot):
     def __init__(self):
-        # Włączamy wszystkie intencje (Intents.all) dla pełnej funkcjonalności bota
         intents = discord.Intents.all()
         super().__init__(
             command_prefix="!", 
             intents=intents,
-            activity=discord.Activity(
-                type=discord.ActivityType.watching, 
-                name="Maks Reps 👟 | /setup_hub"
-            )
+            activity=discord.Activity(type=discord.ActivityType.watching, name="Maks Reps 👟")
         )
 
     async def setup_hook(self):
-        # Lista wszystkich modułów rozszerzeń bota (w tym nowy ultra-szybki rep_hub)
+        # 🔥 Ładujemy wszystkie 3 kluczowe i bezbłędne moduły
         moduly = ['ai_expert', 'private_chat', 'rep_hub']
         
-        print("⚙️ [SYSTEM] Rozpoczynanie ładowania modułów premium...")
+        print("⚙️ [SYSTEM] Ładowanie modułów bota...")
         for modul in moduly:
             try:
                 await self.load_extension(modul)
-                print(f"👑 [SYSTEM] Załadowano moduł: {modul}.py")
+                print(f"✅ Załadowano: {modul}.py")
             except Exception as e:
-                print(f"❌ [BŁĄD] Nie udało się załadować {modul}.py: {e}")
+                print(f"❌ Błąd ładowania {modul}.py: {e}")
 
-        # Synchronizacja komend Slash (tree.sync) na wszystkich serwerach
-        print("⚡ [SYSTEM] Synchronizowanie komend Slash z Discord API...")
-        try:
-            await self.tree.sync()
-            print("✅ [SYSTEM] Wszystkie komendy i przyciski zostały pomyślnie zsynchronizowane!")
-        except Exception as e:
-            print(f"❌ [BŁĄD SYNCHRONIZACJI] {e}")
+        print("⚡ Synchronizacja komend ze strukturą Discord API...")
+        await self.tree.sync()
 
 bot = ElitarnyBotAI()
 
 @bot.event
 async def on_ready():
-    print("\n==================================================")
-    print(f"✨ [SUKCES] Najlepszy Bot AI na świecie działa!")
-    print(f"🤖 Zalogowano jako: {bot.user.name} ({bot.user.id})")
-    print("==================================================\n")
+    print(f"\n🚀 BOT URUCHOMIONY I ZSYNCHRONIZOWANY!")
+    print(f"🤖 Zalogowano jako: {bot.user.name}\n")
 
 if __name__ == "__main__":
     if TOKEN:
         bot.run(TOKEN)
     else:
-        print("❌ [KRYTYCZNY BŁĄD] Brak DISCORD_TOKEN w zmiennych środowiskowych Railway!")
+        print("❌ Brak DISCORD_TOKEN w zmiennych środowiskowych!")
