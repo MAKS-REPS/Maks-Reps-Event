@@ -125,7 +125,8 @@ class ChatCreateView(discord.ui.View):
             guild.me: discord.PermissionOverwrite(read_messages=True, send_messages=True)
         }
 
-        category = interaction.category if interaction.channel.category else None
+        # ZAKODOWANA POPRAWKA ATTRYBUTU KATEGORII
+        category = interaction.channel.category if hasattr(interaction.channel, 'category') else None
         new_channel = await guild.create_text_channel(name=channel_name, overwrites=overwrites, category=category)
         
         welcome_embed = discord.Embed(
@@ -151,7 +152,6 @@ class PrivateChatCog(commands.Cog):
         self.bot.add_view(ChatCloseView())
         self.bot.add_view(TicketAddonsView())
 
-    # 🔥 NOWY, ODŚWIEŻONY EMOBED PANELU PANELU BILETÓW
     @app_commands.command(name="setup_ai_panel", description="Generuje panel biletów prywatnego AI.")
     @app_commands.checks.has_permissions(administrator=True)
     async def setup_ai_panel(self, interaction: discord.Interaction):
