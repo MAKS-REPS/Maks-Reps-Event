@@ -70,7 +70,6 @@ class HubView(discord.ui.View):
                         "3. **Zabezpieczenia:** Zawsze dokupuj *Stretch Film* oraz *Corner Protection*.",
             color=0x2ecc71
         )
-        # ephemeral=False oznacza, że wiadomość zostaje na stałe na czacie dla wszystkich!
         await interaction.response.send_message(embed=embed, ephemeral=False)
 
     @discord.ui.button(label="🛡️ Statusy Paczek & Cło", style=discord.ButtonStyle.danger, custom_id="hub_btn_customs_prod", row=1)
@@ -90,11 +89,14 @@ class RepHubCog(commands.Cog):
         self.bot = bot
 
     async def cog_load(self):
+        # Rejestracja widoku dla trwałych przycisków po restarcie
         self.bot.add_view(HubView())
 
+    # Komenda globalna Slash /setup_hub
     @app_commands.command(name="setup_hub", description="Generuje efektowne, interaktywne Centrum Wiedzy Maks Reps.")
     @app_commands.checks.has_permissions(administrator=True)
     async def setup_hub(self, interaction: discord.Interaction):
+        # Wysyłamy odpowiedź natychmiast, żeby uniknąć błędu "Aplikacja nie reaguje"
         embed = discord.Embed(
             title="⚡ MULTIMEDIALNE CENTRUM WIEDZY — MAKS REPS",
             description="Witamy w oficjalnym i najszybszym hubie informacyjnym serwera!\n\n"
