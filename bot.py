@@ -13,15 +13,17 @@ class GłównyBot(commands.Bot):
         super().__init__(command_prefix="!", intents=intents)
 
     async def setup_hook(self):
-        # 🔗 Łącznik ładuje osobny moduł prywatnego czatu AI
-        modul = 'private_chat'
+        # 🔗 Łącznik ładuje OBA Twoje pliki z systemami AI
+        moduly = ['ai_expert', 'private_chat']
         
-        try:
-            await self.load_extension(modul)
-            print(f"✅ Pomyślnie załadowano moduł prywatnego czatu: {modul}.py")
-        except Exception as e:
-            print(f"❌ Błąd podczas ładowania modułu {modul}.py: {e}")
+        for modul in moduly:
+            try:
+                await self.load_extension(modul)
+                print(f"✅ Pomyślnie załadowano moduł: {modul}.py")
+            except Exception as e:
+                print(f"❌ Błąd podczas ładowania modułu {modul}.py: {e}")
 
+        # Synchronizacja komend slash na serwer
         if GUILD_ID:
             guild = discord.Object(id=int(GUILD_ID))
             self.tree.copy_global_to(guild=guild)
@@ -34,10 +36,10 @@ bot = GłównyBot()
 
 @bot.event
 async def on_ready():
-    print(f"🚀 Bot prywatnego AI działa stabilnie! Zalogowano jako {bot.user}")
+    print(f"🚀 Bot Maks Reps AI gotowy! Zalogowano jako {bot.user}")
 
 if __name__ == "__main__":
     if TOKEN:
         bot.run(TOKEN)
     else:
-        print("❌ Brak TOKENU bota! Sprawdź zmienne w panelu hostingu.")
+        print("❌ Brak TOKENU bota! Sprawdź zmienne w panelu Railway.")
