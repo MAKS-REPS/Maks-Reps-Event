@@ -5,6 +5,7 @@ from google import genai
 from google.genai import types
 import os
 import io
+import asyncio
 
 PROMPT_PRIVATE = """
 Jesteś osobistym, prywatnym doradcą AI na serwerze Maks Reps. Odpowiadasz błyskawicznie, konkretnie i zwięźle. Używaj emotek.
@@ -25,7 +26,6 @@ REFLINK I KUPONY:
 - Kody: Maks.R3ps | Maks20
 """
 
-# Tworzymy folder na bezpieczne logi na dysku bota, jeśli nie istnieje
 if not os.path.exists("ai_transcripts"):
     os.makedirs("ai_transcripts")
 
@@ -63,20 +63,17 @@ class TicketAddonsView(discord.ui.View):
         await interaction.response.send_message(embed=embed, ephemeral=False)
 
 
-# 🔥 ZMIANA: Ciche i natychmiastowe usuwanie bez śladów na czacie
 class ChatCloseView(discord.ui.View):
     def __init__(self):
         super().__init__(timeout=None)
 
     @discord.ui.button(label="🔒 Zamknij i usuń chat", style=discord.ButtonStyle.danger, custom_id="close_ai_chat_prod")
     async def close_chat(self, interaction: discord.Interaction, button: discord.ui.Button):
-        # Od razu dajemy odpowiedź Discordowi, żeby bot nie wisiał (użytkownik tego nie zauważy, bo kanał zaraz zniknie)
         await interaction.response.defer()
         
         channel = interaction.channel
         user_name = channel.name.replace("🧠-chat-", "")
         
-        # Generowanie transkrypcji w tle do tajnego pliku lokalnego
         transcript_text = f"=== ARCHIWUM ROZMOWY AI: {user_name.upper()} ===\n\n"
         async for msg in channel.history(limit=150, oldest_first=True):
             if msg.embeds and "Twój Prywatny Ekspert AI" in (msg.embeds[0].title or ""):
@@ -88,12 +85,10 @@ class ChatCloseView(discord.ui.View):
             
         transcript_text += "=== KONIEC ZAPISU ==="
         
-        # Zapisujemy plik tekstowy na stałe w ukrytym folderze serwera Railway
         file_path = f"ai_transcripts/chat-{user_name}.txt"
         with open(file_path, "w", encoding="utf-8") as f:
             f.write(transcript_text)
 
-        # Natychmiastowe, bezgłośne skasowanie kanału
         await channel.delete()
 
 
@@ -163,11 +158,10 @@ class PrivateChatCog(commands.Cog):
         embed.set_footer(text="Maks Reps • Inteligentny Asystent 24/7")
         await interaction.response.send_message(embed=embed, view=ChatCreateView())
 
-    # 🔥 NOWOŚĆ: Komenda tylko dla Ciebie do wyciągania logów usuniętych chatów
     @app_commands.command(name="check_ai_bilety", description="Tylko dla Ownera: Pobiera archiwum czatu AI wybranego użytkownika.")
     @app_commands.checks.has_permissions(administrator=True)
     async def check_ai_bilety(self, interaction: discord.Interaction, nazwa_uzytkownika: str):
-        await interaction.response.defer(ephemeral=True) # Wynik zobaczysz tylko Ty
+        await interaction.response.defer(ephemeral=True)
         
         clean_name = nazwa_uzytkownika.lower().strip().replace("@", "")
         file_path = f"ai_transcripts/chat-{clean_name}.txt"
@@ -176,7 +170,7 @@ class PrivateChatCog(commands.Cog):
             discord_file = discord.File(file_path)
             await interaction.followup.send(f"📂 Znalazłem tajne archiwum rozmowy dla użytkownika: **{clean_name}**", file=discord_file, ephemeral=True)
         else:
-            await interaction.followup.send(f"❌ Brak zapisanego czatu dla użytkownika: `{clean_name}`. Upewnij się, że wpisujesz jego dokładny nick z Discorda (np. `janusz123`).", ephemeral=True)
+            await interaction.followup.send(f"❌ Brak zapisanego czatu dla użytkownika: `{clean_name}`. Upewnij się, że wpisujesz jego dokładny nick z Discorda.", ephemeral=True)
 
     @app_commands.command(name="zapytaj_ai", description="Zadaj pytanie asystentowi lub prześlij zdjęcie do szybkiego QC.")
     async def zapytaj_ai(self, interaction: discord.Interaction, pytanie: str, zdjecie: discord.Attachment = None):
@@ -209,7 +203,19 @@ class PrivateChatCog(commands.Cog):
 
         except Exception as e:
             print(f"❌ [BŁĄD PRIVATE] {e}")
-            await interaction.followup.send(f"⚠️ Coś poszło nie tak: `{e}`")
+            
+            error_str = str(e).lower()
+            if "503" in error_str or "high demand" in error_str or "unavailable" in error_str:
+                embed_error = discord.Embed(
+                    title="⏳ Serwery AI są chwilowo zajęte",
+                    description="W tej chwili serwery Google Gemini przetwarzają ogromną liczbę żądań na świecie.\n\n"
+                                "🔥 **Co zrobić?**\n"
+                                "Nie martw się, to zazwyczaj chwilowe! Odczekaj około **15-30 sekund** i użyj komendy `/zapytaj_ai` ponownie.",
+                    color=0xe67e22
+                )
+                await interaction.followup.send(embed=embed_error)
+            else:
+                await interaction.followup.send("⚠️ Coś poszło nie tak podczas generowania odpowiedzi przez AI. Spróbuj ponownie za chwilę.")
 
 async def setup(bot: commands.Bot):
     await bot.add_cog(PrivateChatCog(bot))
