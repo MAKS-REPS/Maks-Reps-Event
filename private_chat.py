@@ -238,23 +238,8 @@ class PrivateChatCog(commands.Cog):
         await refresh_admin_panel(interaction.guild)
         await interaction.followup.send("✅ Panel został pomyślnie utworzony! Od teraz będzie się sam aktualizował.", ephemeral=True)
 
-    @app_commands.command(name="check_ai_bilety", description="Tylko dla Ownera: Pobiera archiwum czatu AI wybranego użytkownika.")
-    @app_commands.checks.has_permissions(administrator=True)
-    async def check_ai_bilety(self, interaction: discord.Interaction, nazwa_uzytkownika: str):
-        await interaction.response.defer(ephemeral=True)
-        
-        clean_name = nazwa_uzytkownika.lower().strip().replace("@", "")
-        file_path = f"ai_transcripts/chat-{clean_name}.txt"
-        
-        if os.path.exists(file_path):
-            discord_file = discord.File(file_path)
-            await interaction.followup.send(f"📂 Znalazłem tajne archiwum rozmowy dla użytkownika: **{clean_name}**", file=discord_file, ephemeral=True)
-        else:
-            await interaction.followup.send(f"❌ Brak zapisanego czatu dla użytkownika: `{clean_name}`. Upewnij się, że wpisujesz jego dokładny nick z Discorda.", ephemeral=True)
-
     @app_commands.command(name="zapytaj_ai", description="Zadaj pytanie asystentowi lub prześlij zdjęcie do szybkiego QC.")
     async def zapytaj_ai(self, interaction: discord.Interaction, pytanie: str, zdjecie: discord.Attachment = None):
-        # Dedykowany kanał publiczny oraz akceptacja dla pokoi prywatnych
         ALLOWED_CHANNEL_ID = 1506026307329196242
         
         if interaction.channel.id != ALLOWED_CHANNEL_ID and not interaction.channel.name.startswith("🧠-chat-"):
