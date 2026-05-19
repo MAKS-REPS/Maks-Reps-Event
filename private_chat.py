@@ -171,7 +171,7 @@ class ChatCreateView(discord.ui.View):
             guild.me: discord.PermissionOverwrite(read_messages=True, send_messages=True)
         }
 
-        category = interaction.category if hasattr(interaction.channel, 'category') else None
+        category = interaction.channel.category if hasattr(interaction.channel, 'category') else None
         new_channel = await guild.create_text_channel(name=channel_name, overwrites=overwrites, category=category)
         
         welcome_embed = discord.Embed(
@@ -242,12 +242,16 @@ class PrivateChatCog(commands.Cog):
     async def zapytaj_ai(self, interaction: discord.Interaction, pytanie: str, zdjecie: discord.Attachment = None):
         # 🔥 DEFINICJA DOZWOLONYCH KANAŁÓW PUBLICZNYCH
         PUBLIC_CHANNEL_1 = 1506026307329196242
-        PUBLIC_CHANNEL_2 = 1506032115257446460  # Poprawione ID z Twojej wiadomości
+        PUBLIC_CHANNEL_2 = 1506032115257446460
         
-        is_allowed_public = (interaction.channel.id == PUBLIC_CHANNEL_1 or interaction.channel.id == PUBLIC_CHANNEL_2)
-        is_private_chat = interaction.channel.name.startswith("🧠-chat-") if interaction.channel.name else False
+        # Bezpieczne wyciąganie pełnego obiektu kanału z pamięci bota, aby nazwa (.name) zawsze była dostępna
+        channel = interaction.guild.get_channel(interaction.channel_id) if interaction.guild else interaction.channel
+        channel_name = channel.name if channel and hasattr(channel, 'name') else ""
 
-        # Jeśli to nie jest żaden z dozwolonych kanałów publicznych i nie private chat - bot całkowicie milczy
+        is_allowed_public = (interaction.channel_id == PUBLIC_CHANNEL_1 or interaction.channel_id == PUBLIC_CHANNEL_2)
+        is_private_chat = channel_name.startswith("🧠-chat-")
+
+        # Jeśli to nie żaden z 2 kanałów publicznych i nie bilet prywatny, całkowicie blokujemy wykonanie
         if not is_allowed_public and not is_private_chat:
             return await interaction.response.send_message(
                 "❌ Ta komenda nie może być używana na tym kanale.", 
