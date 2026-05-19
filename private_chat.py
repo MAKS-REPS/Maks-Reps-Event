@@ -18,7 +18,6 @@ TWOJA BAZA WIEDZY O BATCHACH (BUTY - STARA WERSJA):
 - Yeezy 350 / 700 -> LW batch
 - New Balance / ASICS -> ZC batch
 - Balenciaga Track -> OK batch
-- Moncler -> Jieyi / TA
 
 TWOJA BAZA WIEDZY O BATCHACH (UBRANIA - NOWA WERSJA):
 - Denim Tears -> Angelking
@@ -99,7 +98,6 @@ class TicketAddonsView(discord.ui.View):
                         "• **Yeezy 350 / 700:** LW batch\n"
                         "• **New Balance / ASICS:** ZC batch\n"
                         "• **Balenciaga Track:** OK batch\n"
-                        "• **Moncler:** Jieyi / TA\n\n"
                         "### 👕 ODZIEŻ (NOWA WERSJA):\n"
                         "• **Denim Tears:** Angelking\n"
                         "• **Syna / Trapstar / Corteiz:** GOAT\n"
