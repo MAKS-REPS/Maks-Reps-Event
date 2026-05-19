@@ -1,3 +1,4 @@
+
 import discord
 from discord import app_commands
 from discord.ext import commands
@@ -10,7 +11,7 @@ PROMPT_PRIVATE = """
 Jesteś osobistym, prywatnym doradcą AI na serwerze Maks Reps. Odpowiadasz błyskawicznie, konkretnie i zwięźle. Używaj emotek.
 Jeśli użytkownik prześle zdjęcie (butów lub odzieży), zrób szybkie QC: oceń kształt, szwy, jakość materiałów, nadruki, hafty i ogólne wykonanie, dając ocenę 1-10 oraz werdykt GL (Green Light) lub RL (Red Light).
 
-TWOJA BAZA WIEDZY O BATCHACH (BUTY - STARA, NAJLEPSZA WERSJA):
+TWOJA BAZA WIEDZY O BATCHACH (BUTY - STARA WERSJA):
 - Nike Dunk -> M batch
 - Jordan 4 -> GX batch (Black Cat, Military, Pine Green itp.)
 - Jordan 1 -> LJR batch (do Travisów PK 4.0 / FK batch)
@@ -39,54 +40,48 @@ REFLINK I KUPONY:
 - Kody: Maks.R3ps | Maks20
 """
 
-# --- KONFIGURACJA SYSTEMU TICKETÓW ---
-ID_KATEGORII_TICKETOW = 1486842150661656767
-REQUIRED_ROLE_ID = 1457769309735485450
-MAKS_BLUE = 0x3498db
-
 if not os.path.exists("ai_transcripts"):
     os.makedirs("ai_transcripts")
 
 
-class TicketCloseView(discord.ui.View):
-    def __init__(self):
-        super().__init__(timeout=None)
-
-    @discord.ui.button(label="🔒 Zamknij ticket", style=discord.ButtonStyle.danger, custom_id="persistent_close_ticket")
-    async def close_ticket(self, interaction: discord.Interaction, button: discord.ui.Button):
-        # 👑 Sprawdzenie Ownera serwera
-        if interaction.user.id != interaction.guild.owner_id:
-            return await interaction.response.send_message(
-                "❌ Tylko **Owner serwera** ma uprawnienia do zamknięcia tego ticketu!", 
-                ephemeral=True
-            )
+async def refresh_admin_panel(guild: discord.Guild):
+    panel_channel_id = os.getenv("AI_ADMIN_CHANNEL_ID")
+    panel_msg_id = os.getenv("AI_ADMIN_MSG_ID")
+    
+    if not panel_channel_id or not panel_msg_id:
+        return 
         
-        await interaction.response.defer()
+    try:
+        channel = guild.get_channel(int(panel_channel_id))
+        if not channel:
+            return
+            
+        msg = await channel.fetch_message(int(panel_msg_id))
+        ai_channels = [c for c in guild.channels if "chat-" in c.name]
         
-        # 🎬 Mini animacja zamykania kanału
-        anim_embed = discord.Embed(
-            title="🔒 PROCEDURA ZAMYKANIA TICKETU",
-            description="⚙️ Inicjalizacja procesu kasowania pokoju...\n`[⬜⬜⬜⬜⬜⬜⬜⬜⬜⬜]` 0%",
-            color=discord.Color.red()
+        embed = discord.Embed(
+            title="🛠️ PANEL KONTROLNY MODERACJI AI",
+            description="Tutaj wyświetlają się wszystkie aktywne, prywatne rozmowy użytkowników z botem. Lista aktualizuje się automatycznie.",
+            color=0x2f3136
         )
         
-        msg = await interaction.followup.send(embed=anim_embed)
-        
-        frames = [
-            ("⚙️ Generowanie archiwum rozmowy...\n`[🟩🟩🟩⬜⬜⬜⬜⬜⬜⬜]` 30%", 0.6),
-            ("⚙️ Czyszczenie uprawnień i ról...\n`[🟩🟩🟩🟩🟩🟩🟩⬜⬜⬜]` 70%", 0.6),
-            ("⚠️ Kanał zostanie bezpowrotnie usunięty za **3**...\n`[🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩]` 100%", 1.0),
-            ("⚠️ Kanał zostanie bezpowrotnie usunięty za **2**...\n`[🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩]` 100%", 1.0),
-            ("⚠️ Kanał zostanie bezpowrotnie usunięty za **1**...\n`[🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩]` 100%", 1.0)
-        ]
-        
-        for text, delay in frames:
-            await asyncio.sleep(delay)
-            anim_embed.description = text
-            await msg.edit(embed=anim_embed)
+        if ai_channels:
+            links_text = ""
+            for chan in ai_channels:
+                # Ignorujemy główny kanał do tworzenia pokoi w panelu moderacji
+                if chan.name == "chat-ai":
+                    continue
+                user_name = chan.name.replace("🧠-chat-", "").replace("chat-", "")
+                links_text += f"• Pokój użytkownika: **{user_name}** -> <#{chan.id}>\n"
+            embed.add_field(name=f"🟢 Aktywne czaty ({max(0, len(ai_channels)-1)}):", value=links_text, inline=False)
+        else:
+            embed.add_field(name="🔴 Aktywne czaty (0):", value="W tej chwili nikt nie prowadzi rozmowy z ekspertem AI.", inline=False)
             
-        await asyncio.sleep(0.2)
-        await interaction.channel.delete()
+        embed.set_footer(text="Maks Reps System • Live Updates")
+        await msg.edit(embed=embed)
+        
+    except Exception as e:
+        print(f"❌ [BŁĄD AKTUALIZACJI PANELU ADMINA] {e}")
 
 
 class TicketAddonsView(discord.ui.View):
@@ -130,58 +125,105 @@ class TicketAddonsView(discord.ui.View):
         await interaction.response.send_message(embed=embed, ephemeral=False)
 
 
-class TicketMenu(discord.ui.Select):
+class ChatCloseView(discord.ui.View):
     def __init__(self):
-        options = [
-            discord.SelectOption(label="POMOC", description="Ogólna pomoc i pytania", emoji="❓"),
-            discord.SelectOption(label="POMOC Z ZAMÓWIENIEM", description="Kliknij, jeśli potrzebujesz pomocy z zamówieniem", emoji="🛒"),
-            discord.SelectOption(label="PROBLEM Z SHIPPINGIEM", description="Kliknij, jeśli masz problem z shippingiem", emoji="🚛"),
-            discord.SelectOption(label="DOSTĘP", description="Kliknij, aby uzyskać dostęp", emoji="🔑"),
-            discord.SelectOption(label="WSPÓŁPRACA", description="Chcesz zostać naszym promotorem? Kliknij tutaj!", emoji="🤝"),
-        ]
-        super().__init__(
-            placeholder="❌ Nie wybrano żadnej z kategorii", 
-            min_values=1, 
-            max_values=1, 
-            options=options, 
-            custom_id="persistent_ticket_select"
-        )
+        super().__init__(timeout=None)
 
-    async def callback(self, interaction: discord.Interaction):
-        guild = interaction.guild
-        category = guild.get_channel(ID_KATEGORII_TICKETOW)
-        admin_role = guild.get_role(REQUIRED_ROLE_ID)
+    @discord.ui.button(label="🔒 Zamknij i usuń chat", style=discord.ButtonStyle.danger, custom_id="close_ai_chat_prod")
+    async def close_chat(self, interaction: discord.Interaction, button: discord.ui.Button):
+        # 👑 Blokada - tylko Owner serwera może zamknąć chat
+        if interaction.user.id != interaction.guild.owner_id:
+            return await interaction.response.send_message(
+                "❌ Tylko **Owner serwera** ma uprawnienia do zamknięcia tego pokoju AI!", 
+                ephemeral=True
+            )
+
+        await interaction.response.defer()
         
-        if not category or not admin_role:
-            return await interaction.response.send_message("❌ Błąd konfiguracji serwera (brak kategorii lub roli).", ephemeral=True)
+        channel = interaction.channel
+        guild = interaction.guild
+        user_name = channel.name.replace("🧠-chat-", "").replace("chat-", "")
+        
+        # Tworzenie transkryptu rozmowy przed usunięciem
+        transcript_text = f"=== ARCHIWUM ROZMOWY AI: {user_name.upper()} ===\n\n"
+        async for msg in channel.history(limit=150, oldest_first=True):
+            if msg.embeds and "Twój Prywatny Ekspert AI" in (msg.embeds[0].title or ""):
+                continue
+            author = "BOT (AI)" if msg.author.bot else f"UŻYTKOWNIK (@{msg.author.name})"
+            content = msg.embeds[0].description if (msg.author.bot and msg.embeds) else msg.content
+            transcript_text += f"[{msg.created_at.strftime('%Y-%m-%d %H:%M:%S')}] {author}: {content}\n\n"
+            
+        transcript_text += "=== KONIEC ZAPISU ==="
+        
+        file_path = f"ai_transcripts/chat-{user_name}.txt"
+        with open(file_path, "w", encoding="utf-8") as f:
+            f.write(transcript_text)
+
+        # 🎬 Mini animacja paska ładowania przed usunięciem kanału
+        anim_embed = discord.Embed(
+            title="🔒 ZAMYKANIE POKOJU AI",
+            description="⚙️ Zapisywanie historii czatu...\n`[⬜⬜⬜⬜⬜⬜⬜⬜⬜⬜]` 0%",
+            color=discord.Color.red()
+        )
+        anim_msg = await interaction.followup.send(embed=anim_embed)
+        
+        frames = [
+            ("⚙️ Generowanie archiwum i logów...\n`[🟩🟩🟩⬜⬜⬜⬜⬜⬜⬜]` 30%", 0.6),
+            ("⚙️ Aktualizacja panelu administratora...\n`[🟩🟩🟩🟩🟩🟩🟩⬜⬜⬜]` 70%", 0.6),
+            ("⚠️ Pokój zostanie usunięty za **3**...\n`[🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩]` 100%", 1.0),
+            ("⚠️ Pokój zostanie usunięty za **2**...\n`[🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩]` 100%", 1.0),
+            ("⚠️ Pokój zostanie usunięty za **1**...\n`[🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩]` 100%", 1.0)
+        ]
+        
+        for text, delay in frames:
+            await asyncio.sleep(delay)
+            anim_embed.description = text
+            await anim_msg.edit(embed=anim_embed)
+
+        await asyncio.sleep(0.2)
+        await channel.delete()
+        await refresh_admin_panel(guild)
+
+
+class ChatCreateView(discord.ui.View):
+    def __init__(self):
+        super().__init__(timeout=None)
+
+    @discord.ui.button(label="🧠 Zapytaj Eksperta AI (Tekst / QC)", style=discord.ButtonStyle.blurple, custom_id="ai_chat_button_prod")
+    async def open_chat(self, interaction: discord.Interaction, button: discord.ui.Button):
+        guild = interaction.guild
+        user = interaction.user
+        
+        clean_nick = user.name.lower().replace(" ", "-")
+        channel_name = f"🧠-chat-{clean_nick}"
+
+        existing = [c for c in guild.channels if "chat-" in c.name and clean_nick in c.name]
+        if len(existing) >= 1:
+            return await interaction.response.send_message("❌ Masz już otwarty swój prywatny kanał AI!", ephemeral=True)
+
+        await interaction.response.defer(ephemeral=True)
 
         overwrites = {
             guild.default_role: discord.PermissionOverwrite(read_messages=False),
-            interaction.user: discord.PermissionOverwrite(read_messages=True, send_messages=True, attach_files=True),
-            admin_role: discord.PermissionOverwrite(read_messages=True, send_messages=True, attach_files=True)
+            user: discord.PermissionOverwrite(read_messages=True, send_messages=True, attach_files=True),
+            guild.me: discord.PermissionOverwrite(read_messages=True, send_messages=True)
         }
+
+        category = interaction.channel.category if hasattr(interaction.channel, 'category') else None
+        new_channel = await guild.create_text_channel(name=channel_name, overwrites=overwrites, category=category)
         
-        channel = await guild.create_text_channel(
-            name=f"ticket-{interaction.user.name.lower().replace(' ', '-')}", 
-            category=category, 
-            overwrites=overwrites
+        welcome_embed = discord.Embed(
+            title="🧠 Twój Prywatny Ekspert AI",
+            description=f"Siemanko <@{user.id}>! Napisz po prostu swoją wiadomość tekstową poniżej lub **wyślij zdjęcie**, a asystent od razu Ci odpowie!\n\n"
+                        f"• Kiedy skończysz rozmowę, Owner serwera będzie mógł kliknąć czerwony przycisk poniżej, aby zamknąć ten kanał.",
+            color=0x5865F2
         )
         
-        embed = discord.Embed(
-            title="🎫 MAKS REPS × TICKET", 
-            description=f"Witaj {interaction.user.mention}!\nWybrałeś kategorię: **{self.values[0]}**.\nZaraz ktoś z administracji Ci pomoże.\n\n🤖 Na tym kanale możesz rozmawiać bezpośrednio pisząc zwykłe wiadomości tekstowe, a AI Ci odpowie!", 
-            color=MAKS_BLUE
-        )
+        await new_channel.send(embed=welcome_embed, view=ChatCloseView())
+        await new_channel.send("⚡ **Szybkie informacje (widoczne dla wszystkich):**", view=TicketAddonsView())
+        await interaction.followup.send(f"✅ Twój pokój AI: <#{new_channel.id}>", ephemeral=True)
         
-        await channel.send(content=f"{interaction.user.mention} | {admin_role.mention}", embed=embed, view=TicketCloseView())
-        await channel.send("⚡ **Szybkie informacje (widoczne dla wszystkich):**", view=TicketAddonsView())
-        await interaction.response.send_message(f"✅ Otwarto ticket: {channel.mention}", ephemeral=True)
-
-
-class TicketView(discord.ui.View):
-    def __init__(self):
-        super().__init__(timeout=None)
-        self.add_item(TicketMenu())
+        await refresh_admin_panel(guild)
 
 
 class PrivateChatCog(commands.Cog):
@@ -191,8 +233,8 @@ class PrivateChatCog(commands.Cog):
         self.ai_client = genai.Client(api_key=api_key) if api_key else None
 
     async def cog_load(self):
-        self.bot.add_view(TicketView())
-        self.bot.add_view(TicketCloseView())
+        self.bot.add_view(ChatCreateView())
+        self.bot.add_view(ChatCloseView())
         self.bot.add_view(TicketAddonsView())
 
     @app_commands.command(name="setup_ai_panel", description="Generuje panel biletów prywatnego AI.")
@@ -200,32 +242,51 @@ class PrivateChatCog(commands.Cog):
     async def setup_ai_panel(self, interaction: discord.Interaction):
         embed = discord.Embed(
             title="🧠 PRYWATNY SYSTEM WSPARCIA AI × MAKS REPS",
-            description="Potrzebujesz ekspresowej pomocy eksperta modowego? Chcesz sprawdzić jakość swoich przedmiotów ze zdjęć od agenta?\n\n"
-                        "📌 *Kliknij wybór poniżej, aby utworzyć kanał wsparcia.*",
-            color=MAKS_BLUE
+            description="Potrzebujesz ekspresowej pomocy eksperta modowego? Chcesz sprawdzić jakość swoich replik ze zdjęć od agenta?\n\n"
+                        "### 🪐 Co potrafi nasz system AI?\n"
+                        "• **Natychmiastowe QC:** Wyślij zdjęcie, a bot sprawdzi szwy, kształt i wystawi werdykt **GL/RL**.\n"
+                        "• **Dobór Batchy:** Pomoże dobrać najlepszą fabrykę pod wybrane buty lub ubrania.\n"
+                        "• **Wsparcie Techniczne:** Odpowie na pytania o cło, bezpieczne linie wysyłkowe i deklaracje.\n\n"
+                        "📌 *Kliknij przycisk poniżej, aby utworzyć swój w pełni prywatny, zabezpieczony kanał 1-na-1.*",
+            color=0x5865F2
         )
-        await interaction.response.send_message(embed=embed, view=TicketView())
+        embed.set_footer(text="Maks Reps • Inteligentny Asystent 24/7")
+        await interaction.response.send_message(embed=embed, view=ChatCreateView())
 
-    # 🔥 REAKCJA NA ZWYKŁY CHAT TEKSTOWY W PRYWATNYCH KANAŁACH
+    @app_commands.command(name="setup_admin_panel", description="Tylko dla Ownera: Tworzy automatyczny panel podglądu aktywnych chatów AI.")
+    @app_commands.checks.has_permissions(administrator=True)
+    async def setup_admin_panel(self, interaction: discord.Interaction):
+        await interaction.response.defer(ephemeral=True)
+        embed = discord.Embed(
+            title="🛠️ PANEL KONTROLNY MODERACJI AI",
+            description="Inicjalizacja panelu... Za chwilę pojawią się tu aktywne pokoje.",
+            color=0x2f3136
+        )
+        msg = await interaction.channel.send(embed=embed)
+        
+        os.environ["AI_ADMIN_CHANNEL_ID"] = str(interaction.channel.id)
+        os.environ["AI_ADMIN_MSG_ID"] = str(msg.id)
+        
+        await refresh_admin_panel(interaction.guild)
+        await interaction.followup.send("✅ Panel został pomyślnie utworzony!", ephemeral=True)
+
+    # 🔥 AUTOMATYCZNE ODPOWIADANIE NA ZWYKŁY TEKST NA KANAŁACH PRYWATNYCH CHATÓW
     @commands.Cog.listener()
     async def on_message(self, message: discord.Message):
-        # Ignoruj wiadomości od samego bota
         if message.author.bot:
             return
 
-        channel_name = message.channel.name.lower() if message.channel and hasattr(message.channel, 'name') else ""
+        channel_name = str(getattr(message.channel, 'name', '')).lower()
         
-        # Sprawdzamy czy to bilet lub dedykowany chat prywatny
-        if "chat-" in channel_name or "ticket-" in channel_name:
+        # Blokujemy reagowanie na głównym kanale "chat-ai", bot odpowiada tylko w pokojach prywatnych użytkowników
+        if "chat-" in channel_name and channel_name != "chat-ai":
             if not self.ai_client:
                 return
 
-            # Wywołujemy efekt pisania ("bot is typing..."), aby czat wyglądał naturalnie
             async with message.channel.typing():
                 try:
                     contents_payload = []
 
-                    # Obsługa załączników (zdjęć do QC)
                     if message.attachments:
                         for attachment in message.attachments:
                             if attachment.content_type and attachment.content_type.startswith("image/"):
@@ -236,7 +297,6 @@ class PrivateChatCog(commands.Cog):
                     
                     contents_payload.append(types.Part.from_text(text=message.content))
 
-                    # Generowanie odpowiedzi przez model Gemini
                     response = self.ai_client.models.generate_content(
                         model='gemini-2.5-flash',
                         contents=contents_payload,
@@ -244,15 +304,12 @@ class PrivateChatCog(commands.Cog):
                     )
 
                     title_text = "📸 WYNIK SZYBKIEGO QC" if message.attachments else "🤖 ODPOWIEDŹ AI"
-                    embed = discord.Embed(title=title_text, description=response.text, color=MAKS_BLUE)
-                    
-                    # Odpowiedź bezpośrednio oznaczając (reply) użytkownika
+                    embed = discord.Embed(title=title_text, description=response.text, color=0x5865F2)
                     await message.reply(embed=embed)
 
                 except Exception as e:
-                    print(f"❌ [BŁĄD CZATU AI] {e}")
-                    await message.channel.send("⚠️ Coś poszło nie tak podczas generowania odpowiedzi przez AI. Spróbuj ponownie za chwilę.")
-
+                    print(f"❌ [BŁĄD PRYWATNEGO CZATU] {e}")
+                    await message.channel.send("⚠️ Coś poszło nie tak podczas generowania odpowiedzi przez AI.")
 
 async def setup(bot: commands.Bot):
     await bot.add_cog(PrivateChatCog(bot))
