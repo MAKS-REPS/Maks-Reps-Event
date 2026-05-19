@@ -17,6 +17,7 @@ TWOJA BAZA WIEDZY O BATCHACH (BUTY - STARA, NAJLEPSZA WERSJA):
 - Yeezy 350 / 700 -> LW batch
 - New Balance / ASICS -> ZC batch
 - Balenciaga Track -> OK batch
+- Moncler -> Jieyi / TA
 
 TWOJA BAZA WIEDZY O BATCHACH (UBRANIA - NOWA WERSJA):
 - Denim Tears -> Angelking
@@ -45,43 +46,6 @@ MAKS_BLUE = 0x3498db
 
 if not os.path.exists("ai_transcripts"):
     os.makedirs("ai_transcripts")
-
-
-async def refresh_admin_panel(guild: discord.Guild):
-    panel_channel_id = os.getenv("AI_ADMIN_CHANNEL_ID")
-    panel_msg_id = os.getenv("AI_ADMIN_MSG_ID")
-    
-    if not panel_channel_id or not panel_msg_id:
-        return 
-        
-    try:
-        channel = guild.get_channel(int(panel_channel_id))
-        if not channel:
-            return
-            
-        msg = await channel.fetch_message(int(panel_msg_id))
-        ai_channels = [c for c in guild.channels if "chat-" in c.name or "ticket-" in c.name]
-        
-        embed = discord.Embed(
-            title="🛠️ PANEL KONTROLNY MODERACJI AI",
-            description="Tutaj wyświetlają się wszystkie aktywne pokoje. Lista aktualizuje się automatycznie.",
-            color=0x2f3136
-        )
-        
-        if ai_channels:
-            links_text = ""
-            for chan in ai_channels:
-                user_name = chan.name.replace("🧠-chat-", "").replace("chat-", "").replace("ticket-", "")
-                links_text += f"• Pokój użytkownika: **{user_name}** -> <#{chan.id}>\n"
-            embed.add_field(name=f"🟢 Aktywne czaty ({len(ai_channels)}):", value=links_text, inline=False)
-        else:
-            embed.add_field(name="🔴 Aktywne czaty (0):", value="W tej chwili nie ma aktywnych pokoi.", inline=False)
-            
-        embed.set_footer(text="Maks Reps System • Live Updates")
-        await msg.edit(embed=embed)
-        
-    except Exception as e:
-        print(f"❌ [BŁĄD PANELU ADMINA] {e}")
 
 
 class TicketCloseView(discord.ui.View):
@@ -140,6 +104,7 @@ class TicketAddonsView(discord.ui.View):
                         "• **Yeezy 350 / 700:** LW batch\n"
                         "• **New Balance / ASICS:** ZC batch\n"
                         "• **Balenciaga Track:** OK batch\n"
+                        "• **Moncler:** Jieyi / TA\n\n"
                         "### 👕 ODZIEŻ (NOWA WERSJA):\n"
                         "• **Denim Tears:** Angelking\n"
                         "• **Syna / Trapstar / Corteiz:** GOAT\n"
@@ -204,11 +169,10 @@ class TicketMenu(discord.ui.Select):
         
         embed = discord.Embed(
             title="🎫 MAKS REPS × TICKET", 
-            description=f"Witaj {interaction.user.mention}!\nWybrałeś kategorię: **{self.values[0]}**.\nZaraz ktoś z administracji Ci pomoże.", 
+            description=f"Witaj {interaction.user.mention}!\nWybrałeś kategorię: **{self.values[0]}**.\nZaraz ktoś z administracji Ci pomoże.\n\n🤖 Na tym kanale możesz rozmawiać bezpośrednio pisząc zwykłe wiadomości tekstowe, a AI Ci odpowie!", 
             color=MAKS_BLUE
         )
         
-        # Podpięcie TicketCloseView z Twoją nową animacją
         await channel.send(content=f"{interaction.user.mention} | {admin_role.mention}", embed=embed, view=TicketCloseView())
         await channel.send("⚡ **Szybkie informacje (widoczne dla wszystkich):**", view=TicketAddonsView())
         await interaction.response.send_message(f"✅ Otwarto ticket: {channel.mention}", ephemeral=True)
@@ -242,61 +206,52 @@ class PrivateChatCog(commands.Cog):
         )
         await interaction.response.send_message(embed=embed, view=TicketView())
 
-    @app_commands.command(name="zapytaj_ai", description="Zadaj pytanie asystentowi lub prześlij zdjęcie do szybkiego QC.")
-    async def zapytaj_ai(self, interaction: discord.Interaction, pytanie: str, zdjecie: discord.Attachment = None):
-        PUBLIC_CHANNEL_1 = 1506026307329196242
-        PUBLIC_CHANNEL_2 = 1506032115257446460
+    # 🔥 REAKCJA NA ZWYKŁY CHAT TEKSTOWY W PRYWATNYCH KANAŁACH
+    @commands.Cog.listener()
+    async def on_message(self, message: discord.Message):
+        # Ignoruj wiadomości od samego bota
+        if message.author.bot:
+            return
+
+        channel_name = message.channel.name.lower() if message.channel and hasattr(message.channel, 'name') else ""
         
-        channel_name = str(getattr(interaction.channel, 'name', '')).lower()
+        # Sprawdzamy czy to bilet lub dedykowany chat prywatny
+        if "chat-" in channel_name or "ticket-" in channel_name:
+            if not self.ai_client:
+                return
 
-        if not channel_name and interaction.guild:
-            try:
-                fetched_channel = await interaction.guild.fetch_channel(interaction.channel_id)
-                channel_name = str(getattr(fetched_channel, 'name', '')).lower()
-            except Exception:
-                pass
+            # Wywołujemy efekt pisania ("bot is typing..."), aby czat wyglądał naturalnie
+            async with message.channel.typing():
+                try:
+                    contents_payload = []
 
-        is_allowed_public = (interaction.channel_id == PUBLIC_CHANNEL_1 or interaction.channel_id == PUBLIC_CHANNEL_2)
-        
-        # 🔥 KLUCZOWA POPRAWKA: Bot teraz akceptuje kanały z "chat-" oraz z "ticket-"
-        is_private_chat = "chat-" in channel_name or "ticket-" in channel_name
+                    # Obsługa załączników (zdjęć do QC)
+                    if message.attachments:
+                        for attachment in message.attachments:
+                            if attachment.content_type and attachment.content_type.startswith("image/"):
+                                img_bytes = await attachment.read()
+                                contents_payload.append(
+                                    types.Part.from_bytes(data=img_bytes, mime_type=attachment.content_type)
+                                )
+                    
+                    contents_payload.append(types.Part.from_text(text=message.content))
 
-        if not is_allowed_public and not is_private_chat:
-            return await interaction.response.send_message(
-                "❌ Ta komenda nie może być używana na tym kanale.", 
-                ephemeral=True
-            )
-
-        if not self.ai_client:
-            return await interaction.response.send_message("❌ Błąd konfiguracji API.", ephemeral=True)
-
-        await interaction.response.defer(ephemeral=False)
-
-        try:
-            contents_payload = []
-
-            if zdjecie:
-                if zdjecie.content_type and zdjecie.content_type.startswith("image/"):
-                    img_bytes = await zdjecie.read()
-                    contents_payload.append(
-                        types.Part.from_bytes(data=img_bytes, mime_type=zdjecie.content_type)
+                    # Generowanie odpowiedzi przez model Gemini
+                    response = self.ai_client.models.generate_content(
+                        model='gemini-2.5-flash',
+                        contents=contents_payload,
+                        config=types.GenerateContentConfig(system_instruction=PROMPT_PRIVATE, temperature=0.3)
                     )
-            
-            contents_payload.append(types.Part.from_text(text=pytanie))
 
-            response = self.ai_client.models.generate_content(
-                model='gemini-2.5-flash',
-                contents=contents_payload,
-                config=types.GenerateContentConfig(system_instruction=PROMPT_PRIVATE, temperature=0.3)
-            )
+                    title_text = "📸 WYNIK SZYBKIEGO QC" if message.attachments else "🤖 ODPOWIEDŹ AI"
+                    embed = discord.Embed(title=title_text, description=response.text, color=MAKS_BLUE)
+                    
+                    # Odpowiedź bezpośrednio oznaczając (reply) użytkownika
+                    await message.reply(embed=embed)
 
-            title_text = "📸 WYNIK SZYBKIEGO QC" if zdjecie else "🤖 ODPOWIEDŹ AI"
-            embed = discord.Embed(title=title_text, description=response.text, color=MAKS_BLUE)
-            await interaction.followup.send(embed=embed)
-
-        except Exception as e:
-            print(f"❌ [BŁĄD PRIVATE] {e}")
-            await interaction.followup.send("⚠️ Coś poszło nie tak podczas generowania odpowiedzi przez AI. Spróbuj ponownie za chwilę.")
+                except Exception as e:
+                    print(f"❌ [BŁĄD CZATU AI] {e}")
+                    await message.channel.send("⚠️ Coś poszło nie tak podczas generowania odpowiedzi przez AI. Spróbuj ponownie za chwilę.")
 
 
 async def setup(bot: commands.Bot):
