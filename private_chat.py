@@ -5,7 +5,6 @@ from google import genai
 from google.genai import types
 import os
 import io
-import asyncio
 
 PROMPT_PRIVATE = """
 Jesteś osobistym, prywatnym doradcą AI na serwerze Maks Reps. Odpowiadasz błyskawicznie, konkretnie i zwięźle. Używaj emotek.
@@ -41,6 +40,47 @@ REFLINK I KUPONY:
 
 if not os.path.exists("ai_transcripts"):
     os.makedirs("ai_transcripts")
+
+
+# --- FUNKCJA DO AUTOMATYCZNEJ AKTUALIZACJI PANELU WŁAŚCICIELA ---
+async def refresh_admin_panel(guild: discord.Guild):
+    # Szukamy zapisanego ID wiadomości i kanału w zmiennych środowiskowych bota
+    panel_channel_id = os.getenv("AI_ADMIN_CHANNEL_ID")
+    panel_msg_id = os.getenv("AI_ADMIN_MSG_ID")
+    
+    if not panel_channel_id or not panel_msg_id:
+        return # Panel nie został jeszcze skonfigurowany komendą
+        
+    try:
+        channel = guild.get_channel(int(panel_channel_id))
+        if not channel:
+            return
+            
+        msg = await channel.fetch_message(int(panel_msg_id))
+        
+        # Pobieramy wszystkie aktualnie otwarte kanały AI na serwerze
+        ai_channels = [c for c in guild.channels if c.name.startswith("🧠-chat-")]
+        
+        embed = discord.Embed(
+            title="🛠️ PANEL KONTROLNY MODERACJI AI",
+            description="Tutaj wyświetlają się wszystkie aktywne, prywatne rozmowy użytkowników z botem. Lista aktualizuje się automatycznie.",
+            color=0x2f3136
+        )
+        
+        if ai_channels:
+            links_text = ""
+            for chan in ai_channels:
+                user_name = chan.name.replace("🧠-chat-", "")
+                links_text += f"• Pokój użytkownika: **{user_name}** -> <#{chan.id}>\n"
+            embed.add_field(name=f"🟢 Aktywne czaty ({len(ai_channels)}):", value=links_text, inline=False)
+        else:
+            embed.add_field(name="🔴 Aktywne czaty (0):", value="W tej chwili nikt nie prowadzi rozmowy z ekspertem AI.", inline=False)
+            
+        embed.set_footer(text="Maks Reps System • Live Updates")
+        await msg.edit(embed=embed)
+        
+    except Exception as e:
+        print(f"❌ [BŁĄD AKTUALIZACJI PANELU ADMINA] {e}")
 
 
 class TicketAddonsView(discord.ui.View):
@@ -89,6 +129,7 @@ class ChatCloseView(discord.ui.View):
         await interaction.response.defer()
         
         channel = interaction.channel
+        guild = interaction.guild
         user_name = channel.name.replace("🧠-chat-", "")
         
         transcript_text = f"=== ARCHIWUM ROZMOWY AI: {user_name.upper()} ===\n\n"
@@ -107,6 +148,8 @@ class ChatCloseView(discord.ui.View):
             f.write(transcript_text)
 
         await channel.delete()
+        # 🔥 WYWOŁANIE AKTUALIZACJI: Usunięto kanał, odświeżamy listę dla Ownera
+        await refresh_admin_panel(guild)
 
 
 class ChatCreateView(discord.ui.View):
@@ -146,6 +189,9 @@ class ChatCreateView(discord.ui.View):
         await new_channel.send(embed=welcome_embed, view=ChatCloseView())
         await new_channel.send("⚡ **Szybkie informacje (widoczne dla wszystkich):**", view=TicketAddonsView())
         await interaction.followup.send(f"✅ Twój pokój AI: <#{new_channel.id}>", ephemeral=True)
+        
+        # 🔥 WYWOŁANIE AKTUALIZACJI: Powstał nowy kanał, odświeżamy listę dla Ownera
+        await refresh_admin_panel(guild)
 
 
 class PrivateChatCog(commands.Cog):
@@ -175,6 +221,34 @@ class PrivateChatCog(commands.Cog):
         embed.set_footer(text="Maks Reps • Inteligentny Asystent 24/7")
         await interaction.response.send_message(embed=embed, view=ChatCreateView())
 
+    # 🔥 NOWOŚĆ: Generowanie autozaktualizowanego panelu dla Ciebie
+    @app_commands.command(name="setup_admin_panel", description="Tylko dla Ownera: Tworzy automatyczny panel podglądu aktywnych chatów AI.")
+    @app_commands.checks.has_permissions(administrator=True)
+    async def setup_admin_panel(self, interaction: discord.Interaction):
+        await interaction.response.defer(ephemeral=True)
+        
+        embed = discord.Embed(
+            title="🛠️ PANEL KONTROLNY MODERACJI AI",
+            description="Inicjalizacja panelu... Za chwilę pojawią się tu aktywne pokoje.",
+            color=0x2f3136
+        )
+        
+        # Wysyłamy wiadomość na kanale, na którym użyto komendy
+        msg = await interaction.channel.send(embed=embed)
+        
+        # Informujemy właściciela w konsoli/logach jakie ID musi przypisać do zmiennych środowiskowych Railway
+        print(f"\n🚀 [KONFIGURACJA PANELU] Przypisz te wartości w ustawieniach Railway:\n"
+              f"AI_ADMIN_CHANNEL_ID = {interaction.channel.id}\n"
+              f"AI_ADMIN_MSG_ID = {msg.id}\n")
+              
+        # Zapisujemy je tymczasowo w pamięci bota, na wypadek gdybyś nie dodał ich od razu do Railway
+        os.environ["AI_ADMIN_CHANNEL_ID"] = str(interaction.channel.id)
+        os.environ["AI_ADMIN_MSG_ID"] = str(msg.id)
+        
+        # Odpalamy pierwsze odświeżenie
+        await refresh_admin_panel(interaction.guild)
+        await interaction.followup.send("✅ Panel został pomyślnie utworzony! Od teraz będzie się sam aktualizował.", ephemeral=True)
+
     @app_commands.command(name="check_ai_bilety", description="Tylko dla Ownera: Pobiera archiwum czatu AI wybranego użytkownika.")
     @app_commands.checks.has_permissions(administrator=True)
     async def check_ai_bilety(self, interaction: discord.Interaction, nazwa_uzytkownika: str):
@@ -189,7 +263,7 @@ class PrivateChatCog(commands.Cog):
         else:
             await interaction.followup.send(f"❌ Brak zapisanego czatu dla użytkownika: `{clean_name}`. Upewnij się, że wpisujesz jego dokładny nick z Discorda.", ephemeral=True)
 
-    @app_commands.command(name="zapytaj_ai", description="Zadaj pytanie asystentowi lub prześlij zdjęcie do szybkiego QC.")
+    @app_commands.command(name="zapytaj_ai", description="Zadaj pytanie asystentowi lub prześlij zdjęcie do szykbego QC.")
     async def zapytaj_ai(self, interaction: discord.Interaction, pytanie: str, zdjecie: discord.Attachment = None):
         if not self.ai_client:
             return await interaction.response.send_message("❌ Błąd konfiguracji API.", ephemeral=True)
