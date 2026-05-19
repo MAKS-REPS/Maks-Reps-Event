@@ -240,11 +240,16 @@ class PrivateChatCog(commands.Cog):
 
     @app_commands.command(name="zapytaj_ai", description="Zadaj pytanie asystentowi lub prześlij zdjęcie do szybkiego QC.")
     async def zapytaj_ai(self, interaction: discord.Interaction, pytanie: str, zdjecie: discord.Attachment = None):
-        ALLOWED_CHANNEL_ID = 1506026307329196242
+        # 🔥 BLOKADA KANAŁÓW: Zezwalaj tylko na kanale publicznym 1, kanale publicznym 2 LUB wewnątrz prywatnych pokoi AI
+        PUBLIC_CHANNEL_1 = 1506026307329196242
+        PUBLIC_CHANNEL_2 = 1457756805173084309
         
-        if interaction.channel.id != ALLOWED_CHANNEL_ID and not interaction.channel.name.startswith("🧠-chat-"):
+        is_allowed_public = (interaction.channel.id == PUBLIC_CHANNEL_1 or interaction.channel.id == PUBLIC_CHANNEL_2)
+        is_private_chat = interaction.channel.name.startswith("🧠-chat-") if interaction.channel.name else False
+
+        if not is_allowed_public and not is_private_chat:
             return await interaction.response.send_message(
-                f"❌ Tej komendy możesz używać wyłącznie na dedykowanym kanale publicznym <#{ALLOWED_CHANNEL_ID}> lub w Twoim prywatnym pokoju AI!", 
+                f"❌ Tej komendy możesz używać wyłącznie na dedykowanych kanałach publicznych (<#{PUBLIC_CHANNEL_1}>, <#{PUBLIC_CHANNEL_2}>) lub w Twoim prywatnym pokoju AI!", 
                 ephemeral=True
             )
 
@@ -278,13 +283,15 @@ class PrivateChatCog(commands.Cog):
         except Exception as e:
             print(f"❌ [BŁĄD PRIVATE] {e}")
             
-            error_str = str(e).lower()
-            if "503" in error_str or "high demand" in error_str or "unavailable" in error_str:
+            # Zaawansowana konwersja błędu pod ładne graficzne Embedy (Naprawa błędu ze zdjęcia)
+            error_str = repr(e).lower() + str(e).lower()
+            
+            if "503" in error_str or "high demand" in error_str or "unavailable" in error_str or "overloaded" in error_str:
                 embed_error = discord.Embed(
                     title="⏳ Serwery AI są chwilowo zajęte",
-                    description="W tej chwili serwery Google Gemini przetwarzają ogromną liczbę żądań na świecie.\n\n"
+                    description="W tej chwili serwery Google Gemini przetwarzają ogromną liczbę żądań na świecie i model zgłosił status **503 Unavailable**.\n\n"
                                 "🔥 **Co zrobić?**\n"
-                                "Nie martw się, to zazwyczaj chwilowe! Odczekaj około **15-30 sekund** i użyj komendy `/zapytaj_ai` ponownie.",
+                                "Nie martw się, to powszechny, chwilowy skok obciążenia! Odczekaj około **10-20 sekund** i użyj komendy `/zapytaj_ai` ponownie.",
                     color=0xe67e22
                 )
                 await interaction.followup.send(embed=embed_error)
