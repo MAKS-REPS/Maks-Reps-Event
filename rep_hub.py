@@ -32,6 +32,22 @@ BATCH_DATA = {
         "color": 0x3498db,
         "text": "• **ASICS (Kayano 14 / GEL-NYC):** `ZC Batch` — Najwygodniejsza podeszwa na co dzień.\n"
                 "• **New Balance (2002R / 1906 / 550):** `ZC Batch` — Zamsz najwyższej klasy."
+    },
+    # 🔥 NOWOŚĆ: Pełna lista odzieży w Hubie
+    "clothes": {
+        "title": "👕 STREETWEAR & APPAREL: NAJLEPSZE BATCHE",
+        "color": 0x9b59b6,
+        "text": "• **Denim Tears:** `Angelking` — Najlepsze puffy printy.\n"
+                "• **Syna World / Trapstar / Corteiz:** `GOAT` — Niekwestionowany król tych marek.\n"
+                "• **Sp5der:** `PIKA` — Świetna jakość dresów i nadruków.\n"
+                "• **Ami:** `RepsBrothers` — Perfekcyjne hafty i serca.\n"
+                "• **Essentials (FOG) / Chrome Hearts:** `Tophot`\n"
+                "• **Burberry:** `Thethunder`\n"
+                "• **Stone Island:** `TopStoney` — Klasyk, materiały reagujące na ciepło/guziki 1:1.\n"
+                "• **Stussy:** `ZS Factory`\n"
+                "• **Polo Ralph Lauren:** `Newdp`\n"
+                "• **Nike Tech Fleece:** `Husky` — Najlepszy krój i gruby materiał.\n"
+                "• **Supreme:** `Subway Hooligan` — Świetne bogo."
     }
 }
 
@@ -42,6 +58,7 @@ class HubDropdown(discord.ui.Select):
             discord.SelectOption(label="Yeezy & Dunki", description="Klasyki i wygoda", emoji="👟", value="yeezy_dunk"),
             discord.SelectOption(label="Balenciaga & Luxury", description="Marki luksusowe, LV, Mihara", emoji="💸", value="designer"),
             discord.SelectOption(label="Asics & New Balance", description="Wygodne sneakery", emoji="🏃", value="running"),
+            discord.SelectOption(label="Odzież & Streetwear", description="Dresy, T-shirty, Kurtki", emoji="👕", value="clothes"),
         ]
         super().__init__(placeholder="🔥 Wybierz markę/kategorię...", min_values=1, max_values=1, custom_id="hub_dropdown_prod", options=options)
 
