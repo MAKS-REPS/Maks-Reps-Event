@@ -4,21 +4,21 @@ from discord.ext import commands
 from google import genai
 from google.genai import types
 import os
-import io
+import asyncio
 
 PROMPT_PRIVATE = """
 Jesteś osobistym, prywatnym doradcą AI na serwerze Maks Reps. Odpowiadasz błyskawicznie, konkretnie i zwięźle. Używaj emotek.
 Jeśli użytkownik prześle zdjęcie (butów lub odzieży), zrób szybkie QC: oceń kształt, szwy, jakość materiałów, nadruki, hafty i ogólne wykonanie, dając ocenę 1-10 oraz werdykt GL (Green Light) lub RL (Red Light).
 
-TWOJA BAZA WIEDZY O BATCHACH (BUTY):
-- Nike Dunk -> M Batch
-- Jordan 4 -> GX Batch (Black Cat, Military, Pine Green)
-- Jordan 1 -> LJR (PK 4.0 dla modeli Travis Scott)
-- Yeezy -> LW Batch
-- New Balance / ASICS -> ZC Batch
-- Numeris -> W1 | Balenciaga Track -> OK | LV -> Foshan
+TWOJA BAZA WIEDZY O BATCHACH (BUTY - STARA, NAJLEPSZA WERSJA):
+- Nike Dunk -> M batch
+- Jordan 4 -> GX batch (Black Cat, Military, Pine Green itp.)
+- Jordan 1 -> LJR batch (do Travisów PK 4.0 / FK batch)
+- Yeezy 350 / 700 -> LW batch
+- New Balance / ASICS -> ZC batch
+- Balenciaga Track -> OK batch
 
-TWOJA BAZA WIEDZY O BATCHACH (UBRANIA):
+TWOJA BAZA WIEDZY O BATCHACH (UBRANIA - NOWA WERSJA):
 - Denim Tears -> Angelking
 - Syna World / Trapstar / Corteiz -> GOAT
 - Sp5der -> PIKA
@@ -38,6 +38,11 @@ REFLINK I KUPONY:
 - Kody: Maks.R3ps | Maks20
 """
 
+# --- KONFIGURACJA SYSTEMU TICKETÓW ---
+ID_KATEGORII_TICKETOW = 1486842150661656767
+REQUIRED_ROLE_ID = 1457769309735485450
+MAKS_BLUE = 0x3498db
+
 if not os.path.exists("ai_transcripts"):
     os.makedirs("ai_transcripts")
 
@@ -55,29 +60,69 @@ async def refresh_admin_panel(guild: discord.Guild):
             return
             
         msg = await channel.fetch_message(int(panel_msg_id))
-        # Zabezpieczenie przed ucinaniem emoji: szukamy po frazie "chat-"
-        ai_channels = [c for c in guild.channels if "chat-" in c.name]
+        ai_channels = [c for c in guild.channels if "chat-" in c.name or "ticket-" in c.name]
         
         embed = discord.Embed(
             title="🛠️ PANEL KONTROLNY MODERACJI AI",
-            description="Tutaj wyświetlają się wszystkie aktywne, prywatne rozmowy użytkowników z botem. Lista aktualizuje się automatycznie.",
+            description="Tutaj wyświetlają się wszystkie aktywne pokoje. Lista aktualizuje się automatycznie.",
             color=0x2f3136
         )
         
         if ai_channels:
             links_text = ""
             for chan in ai_channels:
-                user_name = chan.name.replace("🧠-chat-", "").replace("chat-", "")
+                user_name = chan.name.replace("🧠-chat-", "").replace("chat-", "").replace("ticket-", "")
                 links_text += f"• Pokój użytkownika: **{user_name}** -> <#{chan.id}>\n"
             embed.add_field(name=f"🟢 Aktywne czaty ({len(ai_channels)}):", value=links_text, inline=False)
         else:
-            embed.add_field(name="🔴 Aktywne czaty (0):", value="W tej chwili nikt nie prowadzi rozmowy z ekspertem AI.", inline=False)
+            embed.add_field(name="🔴 Aktywne czaty (0):", value="W tej chwili nie ma aktywnych pokoi.", inline=False)
             
         embed.set_footer(text="Maks Reps System • Live Updates")
         await msg.edit(embed=embed)
         
     except Exception as e:
-        print(f"❌ [BŁĄD AKTUALIZACJI PANELU ADMINA] {e}")
+        print(f"❌ [BŁĄD PANELU ADMINA] {e}")
+
+
+class TicketCloseView(discord.ui.View):
+    def __init__(self):
+        super().__init__(timeout=None)
+
+    @discord.ui.button(label="🔒 Zamknij ticket", style=discord.ButtonStyle.danger, custom_id="persistent_close_ticket")
+    async def close_ticket(self, interaction: discord.Interaction, button: discord.ui.Button):
+        # 👑 Sprawdzenie Ownera serwera
+        if interaction.user.id != interaction.guild.owner_id:
+            return await interaction.response.send_message(
+                "❌ Tylko **Owner serwera** ma uprawnienia do zamknięcia tego ticketu!", 
+                ephemeral=True
+            )
+        
+        await interaction.response.defer()
+        
+        # 🎬 Mini animacja zamykania kanału
+        anim_embed = discord.Embed(
+            title="🔒 PROCEDURA ZAMYKANIA TICKETU",
+            description="⚙️ Inicjalizacja procesu kasowania pokoju...\n`[⬜⬜⬜⬜⬜⬜⬜⬜⬜⬜]` 0%",
+            color=discord.Color.red()
+        )
+        
+        msg = await interaction.followup.send(embed=anim_embed)
+        
+        frames = [
+            ("⚙️ Generowanie archiwum rozmowy...\n`[🟩🟩🟩⬜⬜⬜⬜⬜⬜⬜]` 30%", 0.6),
+            ("⚙️ Czyszczenie uprawnień i ról...\n`[🟩🟩🟩🟩🟩🟩🟩⬜⬜⬜]` 70%", 0.6),
+            ("⚠️ Kanał zostanie bezpowrotnie usunięty za **3**...\n`[🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩]` 100%", 1.0),
+            ("⚠️ Kanał zostanie bezpowrotnie usunięty za **2**...\n`[🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩]` 100%", 1.0),
+            ("⚠️ Kanał zostanie bezpowrotnie usunięty za **1**...\n`[🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩]` 100%", 1.0)
+        ]
+        
+        for text, delay in frames:
+            await asyncio.sleep(delay)
+            anim_embed.description = text
+            await msg.edit(embed=anim_embed)
+            
+        await asyncio.sleep(0.2)
+        await interaction.channel.delete()
 
 
 class TicketAddonsView(discord.ui.View):
@@ -88,11 +133,14 @@ class TicketAddonsView(discord.ui.View):
     async def faq_batche(self, interaction: discord.Interaction, button: discord.ui.Button):
         embed = discord.Embed(
             title="👟 Oficjalna Lista Best Batchów",
-            description="### 👟 OBUWIE:\n"
-                        "• **Nike Dunk:** M Batch | **Jordan 4:** GX Batch\n"
-                        "• **Jordan 1:** LJR / PK 4.0 | **Yeezy:** LW Batch\n"
-                        "• **ASICS / NB:** ZC Batch | **Balenciaga Track:** OK\n\n"
-                        "### 👕 ODZIEŻ:\n"
+            description="### 👟 OBUWIE (STARA WERSJA):\n"
+                        "• **Nike Dunk:** M batch\n"
+                        "• **Jordan 4:** GX batch (Black Cat, Military, Pine Green itp.)\n"
+                        "• **Jordan 1:** LJR batch (do Travisów PK 4.0 / FK batch)\n"
+                        "• **Yeezy 350 / 700:** LW batch\n"
+                        "• **New Balance / ASICS:** ZC batch\n"
+                        "• **Balenciaga Track:** OK batch\n"
+                        "### 👕 ODZIEŻ (NOWA WERSJA):\n"
                         "• **Denim Tears:** Angelking\n"
                         "• **Syna / Trapstar / Corteiz:** GOAT\n"
                         "• **Sp5der:** PIKA | **Ami:** RepsBrothers\n"
@@ -117,76 +165,59 @@ class TicketAddonsView(discord.ui.View):
         await interaction.response.send_message(embed=embed, ephemeral=False)
 
 
-class ChatCloseView(discord.ui.View):
+class TicketMenu(discord.ui.Select):
     def __init__(self):
-        super().__init__(timeout=None)
+        options = [
+            discord.SelectOption(label="POMOC", description="Ogólna pomoc i pytania", emoji="❓"),
+            discord.SelectOption(label="POMOC Z ZAMÓWIENIEM", description="Kliknij, jeśli potrzebujesz pomocy z zamówieniem", emoji="🛒"),
+            discord.SelectOption(label="PROBLEM Z SHIPPINGIEM", description="Kliknij, jeśli masz problem z shippingiem", emoji="🚛"),
+            discord.SelectOption(label="DOSTĘP", description="Kliknij, aby uzyskać dostęp", emoji="🔑"),
+            discord.SelectOption(label="WSPÓŁPRACA", description="Chcesz zostać naszym promotorem? Kliknij tutaj!", emoji="🤝"),
+        ]
+        super().__init__(
+            placeholder="❌ Nie wybrano żadnej z kategorii", 
+            min_values=1, 
+            max_values=1, 
+            options=options, 
+            custom_id="persistent_ticket_select"
+        )
 
-    @discord.ui.button(label="🔒 Zamknij i usuń chat", style=discord.ButtonStyle.danger, custom_id="close_ai_chat_prod")
-    async def close_chat(self, interaction: discord.Interaction, button: discord.ui.Button):
-        await interaction.response.defer()
-        
-        channel = interaction.channel
+    async def callback(self, interaction: discord.Interaction):
         guild = interaction.guild
-        user_name = channel.name.replace("🧠-chat-", "").replace("chat-", "")
+        category = guild.get_channel(ID_KATEGORII_TICKETOW)
+        admin_role = guild.get_role(REQUIRED_ROLE_ID)
         
-        transcript_text = f"=== ARCHIWUM ROZMOWY AI: {user_name.upper()} ===\n\n"
-        async for msg in channel.history(limit=150, oldest_first=True):
-            if msg.embeds and "Twój Prywatny Ekspert AI" in (msg.embeds[0].title or ""):
-                continue
-            
-            author = "BOT (AI)" if msg.author.bot else f"UŻYTKOWNIK (@{msg.author.name})"
-            content = msg.embeds[0].description if (msg.author.bot and msg.embeds) else msg.content
-            transcript_text += f"[{msg.created_at.strftime('%Y-%m-%d %H:%M:%S')}] {author}: {content}\n\n"
-            
-        transcript_text += "=== KONIEC ZAPISU ==="
-        
-        file_path = f"ai_transcripts/chat-{user_name}.txt"
-        with open(file_path, "w", encoding="utf-8") as f:
-            f.write(transcript_text)
-
-        await channel.delete()
-        await refresh_admin_panel(guild)
-
-
-class ChatCreateView(discord.ui.View):
-    def __init__(self):
-        super().__init__(timeout=None)
-
-    @discord.ui.button(label="🧠 Zapytaj Eksperta AI (Tekst / QC)", style=discord.ButtonStyle.blurple, custom_id="ai_chat_button_prod")
-    async def open_chat(self, interaction: discord.Interaction, button: discord.ui.Button):
-        guild = interaction.guild
-        user = interaction.user
-        
-        clean_nick = user.name.lower().replace(" ", "-")
-        channel_name = f"🧠-chat-{clean_nick}"
-
-        existing = [c for c in guild.channels if "chat-" in c.name and clean_nick in c.name]
-        if len(existing) >= 1:
-            return await interaction.response.send_message("❌ Masz już otwarty swój prywatny kanał AI!", ephemeral=True)
-
-        await interaction.response.defer(ephemeral=True)
+        if not category or not admin_role:
+            return await interaction.response.send_message("❌ Błąd konfiguracji serwera (brak kategorii lub roli).", ephemeral=True)
 
         overwrites = {
             guild.default_role: discord.PermissionOverwrite(read_messages=False),
-            user: discord.PermissionOverwrite(read_messages=True, send_messages=True, attach_files=True),
-            guild.me: discord.PermissionOverwrite(read_messages=True, send_messages=True)
+            interaction.user: discord.PermissionOverwrite(read_messages=True, send_messages=True, attach_files=True),
+            admin_role: discord.PermissionOverwrite(read_messages=True, send_messages=True, attach_files=True)
         }
-
-        category = interaction.channel.category if hasattr(interaction.channel, 'category') else None
-        new_channel = await guild.create_text_channel(name=channel_name, overwrites=overwrites, category=category)
         
-        welcome_embed = discord.Embed(
-            title="🧠 Twój Prywatny Ekspert AI",
-            description=f"Siemanko <@{user.id}>! Napisz poniżej swoje pytanie lub **użyj komendy `/zapytaj_ai`** aby uzyskać odpowiedź lub zrobić **QC zdjęcia**!\n\n"
-                        f"• Kiedy skończiesz rozmowę, kliknij czerwony przycisk poniżej, aby zamknąć ten kanał.",
-            color=0x5865F2
+        channel = await guild.create_text_channel(
+            name=f"ticket-{interaction.user.name.lower().replace(' ', '-')}", 
+            category=category, 
+            overwrites=overwrites
         )
         
-        await new_channel.send(embed=welcome_embed, view=ChatCloseView())
-        await new_channel.send("⚡ **Szybkie informacje (widoczne dla wszystkich):**", view=TicketAddonsView())
-        await interaction.followup.send(f"✅ Twój pokój AI: <#{new_channel.id}>", ephemeral=True)
+        embed = discord.Embed(
+            title="🎫 MAKS REPS × TICKET", 
+            description=f"Witaj {interaction.user.mention}!\nWybrałeś kategorię: **{self.values[0]}**.\nZaraz ktoś z administracji Ci pomoże.", 
+            color=MAKS_BLUE
+        )
         
-        await refresh_admin_panel(guild)
+        # Podpięcie TicketCloseView z Twoją nową animacją
+        await channel.send(content=f"{interaction.user.mention} | {admin_role.mention}", embed=embed, view=TicketCloseView())
+        await channel.send("⚡ **Szybkie informacje (widoczne dla wszystkich):**", view=TicketAddonsView())
+        await interaction.response.send_message(f"✅ Otwarto ticket: {channel.mention}", ephemeral=True)
+
+
+class TicketView(discord.ui.View):
+    def __init__(self):
+        super().__init__(timeout=None)
+        self.add_item(TicketMenu())
 
 
 class PrivateChatCog(commands.Cog):
@@ -196,8 +227,8 @@ class PrivateChatCog(commands.Cog):
         self.ai_client = genai.Client(api_key=api_key) if api_key else None
 
     async def cog_load(self):
-        self.bot.add_view(ChatCreateView())
-        self.bot.add_view(ChatCloseView())
+        self.bot.add_view(TicketView())
+        self.bot.add_view(TicketCloseView())
         self.bot.add_view(TicketAddonsView())
 
     @app_commands.command(name="setup_ai_panel", description="Generuje panel biletów prywatnego AI.")
@@ -206,48 +237,18 @@ class PrivateChatCog(commands.Cog):
         embed = discord.Embed(
             title="🧠 PRYWATNY SYSTEM WSPARCIA AI × MAKS REPS",
             description="Potrzebujesz ekspresowej pomocy eksperta modowego? Chcesz sprawdzić jakość swoich przedmiotów ze zdjęć od agenta?\n\n"
-                        "### 🪐 Co potrafi nasz system AI?\n"
-                        "• **Natychmiastowe QC:** Wyślij zdjęcie, a bot oceni detale, kształt i wystawi werdykt **GL/RL**.\n"
-                        "• **Dobór Batchy:** Pomoże dobrać najlepszą fabrykę pod konkretne modele butów lub ubrań.\n"
-                        "• **Wsparcie Techniczne:** Odpowie na pytania o statusy paczek, bezpieczne linie wysyłkowe i deklaracje.\n\n"
-                        "📌 *Kliknij przycisk poniżej, aby utworzyć swój w pełni prywatny, zabezpieczony kanał 1-na-1.*",
-            color=0x5865F2
+                        "📌 *Kliknij wybór poniżej, aby utworzyć kanał wsparcia.*",
+            color=MAKS_BLUE
         )
-        embed.set_footer(text="Maks Reps • Inteligentny Asystent 24/7")
-        await interaction.response.send_message(embed=embed, view=ChatCreateView())
-
-    @app_commands.command(name="setup_admin_panel", description="Tylko dla Ownera: Tworzy automatyczny panel podglądu aktywnych chatów AI.")
-    @app_commands.checks.has_permissions(administrator=True)
-    async def setup_admin_panel(self, interaction: discord.Interaction):
-        await interaction.response.defer(ephemeral=True)
-        
-        embed = discord.Embed(
-            title="🛠️ PANEL KONTROLNY MODERACJI AI",
-            description="Inicjalizacja panelu... Za chwilę pojawią się tu aktywne pokoje.",
-            color=0x2f3136
-        )
-        
-        msg = await interaction.channel.send(embed=embed)
-        
-        print(f"\n🚀 [KONFIGURACJA PANELU] Przypisz te wartości w ustawieniach Railway:\n"
-              f"AI_ADMIN_CHANNEL_ID = {interaction.channel.id}\n"
-              f"AI_ADMIN_MSG_ID = {msg.id}\n")
-              
-        os.environ["AI_ADMIN_CHANNEL_ID"] = str(interaction.channel.id)
-        os.environ["AI_ADMIN_MSG_ID"] = str(msg.id)
-        
-        await refresh_admin_panel(interaction.guild)
-        await interaction.followup.send("✅ Panel został pomyślnie utworzony! Od teraz będzie się sam aktualizował.", ephemeral=True)
+        await interaction.response.send_message(embed=embed, view=TicketView())
 
     @app_commands.command(name="zapytaj_ai", description="Zadaj pytanie asystentowi lub prześlij zdjęcie do szybkiego QC.")
     async def zapytaj_ai(self, interaction: discord.Interaction, pytanie: str, zdjecie: discord.Attachment = None):
         PUBLIC_CHANNEL_1 = 1506026307329196242
         PUBLIC_CHANNEL_2 = 1506032115257446460
         
-        # Super-bezpieczne pobieranie nazwy kanału
         channel_name = str(getattr(interaction.channel, 'name', '')).lower()
 
-        # Jeśli z jakiegoś powodu nazwy nie ma w pamięci, dociągamy ją z serwera
         if not channel_name and interaction.guild:
             try:
                 fetched_channel = await interaction.guild.fetch_channel(interaction.channel_id)
@@ -257,12 +258,12 @@ class PrivateChatCog(commands.Cog):
 
         is_allowed_public = (interaction.channel_id == PUBLIC_CHANNEL_1 or interaction.channel_id == PUBLIC_CHANNEL_2)
         
-        # Omijamy problem z emoji - szukamy tylko słowa "chat-"
-        is_private_chat = "chat-" in channel_name
+        # 🔥 KLUCZOWA POPRAWKA: Bot teraz akceptuje kanały z "chat-" oraz z "ticket-"
+        is_private_chat = "chat-" in channel_name or "ticket-" in channel_name
 
         if not is_allowed_public and not is_private_chat:
             return await interaction.response.send_message(
-                f"❌ Ta komenda nie może być używana na tym kanale. (Zabezpieczenie anty-spam)", 
+                "❌ Ta komenda nie może być używana na tym kanale.", 
                 ephemeral=True
             )
 
@@ -290,25 +291,13 @@ class PrivateChatCog(commands.Cog):
             )
 
             title_text = "📸 WYNIK SZYBKIEGO QC" if zdjecie else "🤖 ODPOWIEDŹ AI"
-            embed = discord.Embed(title=title_text, description=response.text, color=0x5865F2)
+            embed = discord.Embed(title=title_text, description=response.text, color=MAKS_BLUE)
             await interaction.followup.send(embed=embed)
 
         except Exception as e:
             print(f"❌ [BŁĄD PRIVATE] {e}")
-            
-            error_str = repr(e).lower() + str(e).lower()
-            
-            if "503" in error_str or "high demand" in error_str or "unavailable" in error_str or "overloaded" in error_str:
-                embed_error = discord.Embed(
-                    title="⏳ Serwery AI są chwilowo zajęte",
-                    description="W tej chwili serwery Google Gemini przetwarzają ogromną liczbę żądań na świecie i model zgłosił status **503 Unavailable**.\n\n"
-                                "🔥 **Co zrobić?**\n"
-                                "Nie martw się, to powszechny, chwilowy skok obciążenia! Odczekaj około **10-20 sekund** i użyj komendy `/zapytaj_ai` ponownie.",
-                    color=0xe67e22
-                )
-                await interaction.followup.send(embed=embed_error)
-            else:
-                await interaction.followup.send("⚠️ Coś poszło nie tak podczas generowania odpowiedzi przez AI. Spróbuj ponownie za chwilę.")
+            await interaction.followup.send("⚠️ Coś poszło nie tak podczas generowania odpowiedzi przez AI. Spróbuj ponownie za chwilę.")
+
 
 async def setup(bot: commands.Bot):
     await bot.add_cog(PrivateChatCog(bot))
