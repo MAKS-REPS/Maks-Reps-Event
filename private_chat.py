@@ -171,7 +171,7 @@ class ChatCreateView(discord.ui.View):
             guild.me: discord.PermissionOverwrite(read_messages=True, send_messages=True)
         }
 
-        category = interaction.channel.category if hasattr(interaction.channel, 'category') else None
+        category = interaction.category if hasattr(interaction.channel, 'category') else None
         new_channel = await guild.create_text_channel(name=channel_name, overwrites=overwrites, category=category)
         
         welcome_embed = discord.Embed(
@@ -240,16 +240,17 @@ class PrivateChatCog(commands.Cog):
 
     @app_commands.command(name="zapytaj_ai", description="Zadaj pytanie asystentowi lub prześlij zdjęcie do szybkiego QC.")
     async def zapytaj_ai(self, interaction: discord.Interaction, pytanie: str, zdjecie: discord.Attachment = None):
-        # 🔥 BLOKADA KANAŁÓW: Zezwalaj tylko na kanale publicznym 1, kanale publicznym 2 LUB wewnątrz prywatnych pokoi AI
+        # 🔥 DEFINICJA DOZWOLONYCH KANAŁÓW PUBLICZNYCH
         PUBLIC_CHANNEL_1 = 1506026307329196242
-        PUBLIC_CHANNEL_2 = 1457756805173084309
+        PUBLIC_CHANNEL_2 = 1506032115257446460  # Poprawione ID z Twojej wiadomości
         
         is_allowed_public = (interaction.channel.id == PUBLIC_CHANNEL_1 or interaction.channel.id == PUBLIC_CHANNEL_2)
         is_private_chat = interaction.channel.name.startswith("🧠-chat-") if interaction.channel.name else False
 
+        # Jeśli to nie jest żaden z dozwolonych kanałów publicznych i nie private chat - bot całkowicie milczy
         if not is_allowed_public and not is_private_chat:
             return await interaction.response.send_message(
-                f"❌ Tej komendy możesz używać wyłącznie na dedykowanych kanałach publicznych (<#{PUBLIC_CHANNEL_1}>, <#{PUBLIC_CHANNEL_2}>) lub w Twoim prywatnym pokoju AI!", 
+                "❌ Ta komenda nie może być używana na tym kanale.", 
                 ephemeral=True
             )
 
@@ -283,7 +284,6 @@ class PrivateChatCog(commands.Cog):
         except Exception as e:
             print(f"❌ [BŁĄD PRIVATE] {e}")
             
-            # Zaawansowana konwersja błędu pod ładne graficzne Embedy (Naprawa błędu ze zdjęcia)
             error_str = repr(e).lower() + str(e).lower()
             
             if "503" in error_str or "high demand" in error_str or "unavailable" in error_str or "overloaded" in error_str:
