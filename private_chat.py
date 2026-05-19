@@ -55,7 +55,8 @@ async def refresh_admin_panel(guild: discord.Guild):
             return
             
         msg = await channel.fetch_message(int(panel_msg_id))
-        ai_channels = [c for c in guild.channels if c.name.startswith("🧠-chat-")]
+        # Zabezpieczenie przed ucinaniem emoji: szukamy po frazie "chat-"
+        ai_channels = [c for c in guild.channels if "chat-" in c.name]
         
         embed = discord.Embed(
             title="🛠️ PANEL KONTROLNY MODERACJI AI",
@@ -66,7 +67,7 @@ async def refresh_admin_panel(guild: discord.Guild):
         if ai_channels:
             links_text = ""
             for chan in ai_channels:
-                user_name = chan.name.replace("🧠-chat-", "")
+                user_name = chan.name.replace("🧠-chat-", "").replace("chat-", "")
                 links_text += f"• Pokój użytkownika: **{user_name}** -> <#{chan.id}>\n"
             embed.add_field(name=f"🟢 Aktywne czaty ({len(ai_channels)}):", value=links_text, inline=False)
         else:
@@ -126,7 +127,7 @@ class ChatCloseView(discord.ui.View):
         
         channel = interaction.channel
         guild = interaction.guild
-        user_name = channel.name.replace("🧠-chat-", "")
+        user_name = channel.name.replace("🧠-chat-", "").replace("chat-", "")
         
         transcript_text = f"=== ARCHIWUM ROZMOWY AI: {user_name.upper()} ===\n\n"
         async for msg in channel.history(limit=150, oldest_first=True):
@@ -159,7 +160,7 @@ class ChatCreateView(discord.ui.View):
         clean_nick = user.name.lower().replace(" ", "-")
         channel_name = f"🧠-chat-{clean_nick}"
 
-        existing = [c for c in guild.channels if c.name == channel_name]
+        existing = [c for c in guild.channels if "chat-" in c.name and clean_nick in c.name]
         if len(existing) >= 1:
             return await interaction.response.send_message("❌ Masz już otwarty swój prywatny kanał AI!", ephemeral=True)
 
@@ -240,21 +241,28 @@ class PrivateChatCog(commands.Cog):
 
     @app_commands.command(name="zapytaj_ai", description="Zadaj pytanie asystentowi lub prześlij zdjęcie do szybkiego QC.")
     async def zapytaj_ai(self, interaction: discord.Interaction, pytanie: str, zdjecie: discord.Attachment = None):
-        # 🔥 DEFINICJA DOZWOLONYCH KANAŁÓW PUBLICZNYCH
         PUBLIC_CHANNEL_1 = 1506026307329196242
         PUBLIC_CHANNEL_2 = 1506032115257446460
         
-        # Bezpieczne wyciąganie pełnego obiektu kanału z pamięci bota, aby nazwa (.name) zawsze była dostępna
-        channel = interaction.guild.get_channel(interaction.channel_id) if interaction.guild else interaction.channel
-        channel_name = channel.name if channel and hasattr(channel, 'name') else ""
+        # Super-bezpieczne pobieranie nazwy kanału
+        channel_name = str(getattr(interaction.channel, 'name', '')).lower()
+
+        # Jeśli z jakiegoś powodu nazwy nie ma w pamięci, dociągamy ją z serwera
+        if not channel_name and interaction.guild:
+            try:
+                fetched_channel = await interaction.guild.fetch_channel(interaction.channel_id)
+                channel_name = str(getattr(fetched_channel, 'name', '')).lower()
+            except Exception:
+                pass
 
         is_allowed_public = (interaction.channel_id == PUBLIC_CHANNEL_1 or interaction.channel_id == PUBLIC_CHANNEL_2)
-        is_private_chat = channel_name.startswith("🧠-chat-")
+        
+        # Omijamy problem z emoji - szukamy tylko słowa "chat-"
+        is_private_chat = "chat-" in channel_name
 
-        # Jeśli to nie żaden z 2 kanałów publicznych i nie bilet prywatny, całkowicie blokujemy wykonanie
         if not is_allowed_public and not is_private_chat:
             return await interaction.response.send_message(
-                "❌ Ta komenda nie może być używana na tym kanale.", 
+                f"❌ Ta komenda nie może być używana na tym kanale. (Zabezpieczenie anty-spam)", 
                 ephemeral=True
             )
 
