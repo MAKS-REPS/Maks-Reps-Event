@@ -9,15 +9,28 @@ import asyncio
 
 PROMPT_PRIVATE = """
 Jesteś osobistym, prywatnym doradcą AI na serwerze Maks Reps. Odpowiadasz błyskawicznie, konkretnie i zwięźle. Używaj emotek.
-Jeśli użytkownik prześle zdjęcie, zrób szybkie QC: oceń kształt, szwy, jakość materiałów i ogólne wykonanie, dając ocenę 1-10 oraz werdykt GL (Green Light) lub RL (Red Light).
+Jeśli użytkownik prześle zdjęcie (butów lub odzieży), zrób szybkie QC: oceń kształt, szwy, jakość materiałów, nadruki, hafty i ogólne wykonanie, dając ocenę 1-10 oraz werdykt GL (Green Light) lub RL (Red Light).
 
-TWOJA BAZA WIEDZY O BATCHACH:
+TWOJA BAZA WIEDZY O BATCHACH (BUTY):
 - Nike Dunk -> M Batch
 - Jordan 4 -> GX Batch (Black Cat, Military, Pine Green)
 - Jordan 1 -> LJR (PK 4.0 dla modeli Travis Scott)
 - Yeezy -> LW Batch
 - New Balance / ASICS -> ZC Batch
 - Numeris -> W1 | Balenciaga Track -> OK | LV -> Foshan
+
+TWOJA BAZA WIEDZY O BATCHACH (UBRANIA):
+- Denim Tears -> Angelking
+- Syna World / Trapstar / Corteiz -> GOAT
+- Sp5der -> PIKA
+- Ami -> RepsBrothers
+- Essentials (FOG) / Chrome Hearts -> Tophot
+- Burberry -> Thethunder
+- Stone Island -> TopStoney
+- Stussy -> ZS Factory
+- Polo Ralph Lauren -> Newdp
+- Nike Tech Fleece -> Husky
+- Supreme -> Subway Hooligan
 
 ZASADY: Skupiasz się wyłącznie na jakości, dopasowaniu (fitowaniu) i doborze najlepszych fabryk. Nigdy nie wspominaj o konkretnych cenach, kosztach, walutach ani kwotach zniżek.
 
@@ -34,18 +47,22 @@ class TicketAddonsView(discord.ui.View):
     def __init__(self):
         super().__init__(timeout=None)
 
-    @discord.ui.button(label="👟 Lista Best Batchy", style=discord.ButtonStyle.secondary, custom_id="faq_batche")
+    @discord.ui.button(label="👟 Lista Best Batchy (Buty i Ubrania)", style=discord.ButtonStyle.secondary, custom_id="faq_batche")
     async def faq_batche(self, interaction: discord.Interaction, button: discord.ui.Button):
         embed = discord.Embed(
             title="👟 Oficjalna Lista Best Batchów",
-            description="• **Nike Dunk / Dunk Low:** M Batch\n"
-                        "• **Jordan 4:** GX Batch\n"
-                        "• **Jordan 1:** LJR / PK 4.0\n"
-                        "• **Yeezy:** LW Batch\n"
-                        "• **ASICS / New Balance:** ZC Batch\n"
-                        "• **Numeris:** Batch W1\n"
-                        "• **Louis Vuitton:** Foshan\n"
-                        "• **Balenciaga (Track):** OK Batch",
+            description="### 👟 OBUWIE:\n"
+                        "• **Nike Dunk:** M Batch | **Jordan 4:** GX Batch\n"
+                        "• **Jordan 1:** LJR / PK 4.0 | **Yeezy:** LW Batch\n"
+                        "• **ASICS / NB:** ZC Batch | **Balenciaga Track:** OK\n\n"
+                        "### 👕 ODZIEŻ:\n"
+                        "• **Denim Tears:** Angelking\n"
+                        "• **Syna / Trapstar / Corteiz:** GOAT\n"
+                        "• **Sp5der:** PIKA | **Ami:** RepsBrothers\n"
+                        "• **Essentials / Chrome Hearts:** Tophot\n"
+                        "• **Burberry:** Thethunder | **Stone Island:** TopStoney\n"
+                        "• **Stussy:** ZS Factory | **Polo RL:** Newdp\n"
+                        "• **Nike Tech:** Husky | **Supreme:** Subway Hooligan",
             color=0x9b59b6
         )
         await interaction.response.send_message(embed=embed, ephemeral=False)
